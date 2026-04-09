@@ -1,0 +1,13 @@
+# Cache and compiled junk
+**/.cache/
+**/__pycache__/
+
+# Secrets or tokens (if you leave them in here for some reason)
+**/secrets.*
+**/*.env
+**/*token*
+op/config
+raycast/extensions/
+gitleaks-report.json
+.bfg-replacements.txt
+.DS_Store
