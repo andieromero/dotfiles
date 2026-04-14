@@ -6,7 +6,7 @@ eval "$(starship init zsh)"
 export PATH="$HOME/.local/bin:$PATH"
 
 # The next line updates PATH for egcli command.
-if [ -f '/Users/zreed/Library/Group Containers/FELUD555VC.group.com.egnyte.DesktopApp/CLI/egcli.inc' ]; then . '/Users/zreed/Library/Group Containers/FELUD555VC.group.com.egnyte.DesktopApp/CLI/egcli.inc'; fi
+if [ -f "$HOME/Library/Group Containers/FELUD555VC.group.com.egnyte.DesktopApp/CLI/egcli.inc" ]; then . "$HOME/Library/Group Containers/FELUD555VC.group.com.egnyte.DesktopApp/CLI/egcli.inc"; fi
 
 # ZSH-Autosuggestions
 # plugins=(git zsh-autosuggestions zsh-syntax-highlighting web-search)
