@@ -103,35 +103,107 @@ On next login AeroSpace's `on-window-detected` rules route each window to its de
 
 ## Workspace layout
 
-| WS | Monitor | Apps | Launch hotkey |
-|----|---------|------|---------------|
-| 1 | Main | Google Chrome | `alt-b` |
-| 2 | Main | Windsurf | `alt-c` |
-| 3 | Main | Ghostty | `alt-t` |
-| 4 | Main | Outlook / Word / Excel / PowerPoint | `alt-o` |
-| 5 | Main | Free / overflow | — |
-| 6 | Secondary when docked | Slack + WhatsApp | `alt-s` |
-| 7 | Secondary when docked | Plexamp + Spotify | — |
-| 8 | Secondary when docked | Zoom + Google Meet popouts | — |
-| 9 | Secondary when docked | Obsidian + Messages + scratch | `alt-w` (Obsidian) |
+Two-monitor flow (when docked), with graceful single-monitor fallback when on the go.
 
-Workspaces 6–9 are pinned to the secondary monitor and gracefully fall back to main when no second display is attached. Plug/unplug a monitor and workspaces migrate automatically.
+| WS | Monitor when docked | Pinned anchor | Launch hotkey |
+|----|--------------------|---------------|---------------|
+| 1 | USB C2 (reference) | Free / scratch | — |
+| 2 | USB C2 | Slack | `alt-s` |
+| 3 | USB C2 | Free | — |
+| 4 | USB C2 | Free | — |
+| 5 | HP E27 G5 (active) | Ghostty | `alt-t` |
+| 6 | HP E27 G5 | Windsurf | `alt-c` |
+| 7 | HP E27 G5 | Chrome | `alt-b` |
+| 8 | HP E27 G5 | **Overflow / inbox** — unpinned apps land here | — |
+| 9 | USB C2 (hidden from bar) | Scratch (Obsidian / Messages) | `alt-w` |
 
-### AeroSpace cheat sheet
+Only Ghostty, Windsurf, Chrome, and Slack are pinned. Every other app falls through to workspace 8 via a catch-all rule — use the sketchybar inbox icon on WS 8 as your reference for "what did I just open". Send anything out of 8 to a specific workspace with `caps+N`.
+
+When only one display is attached, every pinned monitor name falls back to `main`, so all workspaces collapse onto that one screen.
+
+### Keybindings cheat sheet
+
+All keybindings unify around `cmd` for window management so the whole flow is on the left hand.
+
+**Workspace navigation**
 
 | Keys | Action |
 |---|---|
-| `alt-h / j / k / l` | Focus window left / down / up / right |
-| `alt-shift-h / j / k / l` | Swap focused window with neighbor |
-| `alt-<n>` | Switch to workspace N |
-| `alt-shift-<n>` | Send focused window to workspace N |
+| `cmd-1..9` | Switch to workspace N |
+| `caps-1..9` (hyper) | Move focused window to workspace N |
 | `alt-tab` | Toggle last two workspaces |
 | `alt-shift-tab` | Move current workspace to the other monitor |
-| `alt-f` | Fullscreen focused window |
-| `alt-e` | Tile layout |
-| `alt-,` | Accordion layout |
+
+**Focus (window-level)**
+
+| Keys | Action |
+|---|---|
+| `cmd-←/↓/↑/→` | Focus window directionally, wrapping across monitors |
+| `alt-h/j/k/l` | Same, vim-style (backup) |
+
+**Swap windows within a workspace**
+
+| Keys | Action |
+|---|---|
+| `alt-shift-h/j/k/l` | Swap focused window with neighbor |
 | `alt-shift-minus / equal` | Resize focused window smaller / larger |
-| `alt-shift-;` | Enter service mode (then `esc` reload, `r` flatten, `f` toggle float, `backspace` close others) |
+
+**Layout toggles**
+
+| Keys | Action |
+|---|---|
+| `cmd-\` | Tiles orientation: horizontal ↔ vertical |
+| `cmd-/` | Accordion orientation: horizontal ↔ vertical |
+| `cmd-.` | Tiles ↔ accordion |
+| `cmd-0` | Fullscreen toggle |
+| `cmd-'` | Float ↔ tile toggle |
+| `alt-e` / `alt-,` / `alt-f` | Same toggles, alt-prefixed backups |
+
+**App launchers**
+
+| Keys | Launch |
+|---|---|
+| `alt-b` | Google Chrome |
+| `alt-c` | Windsurf |
+| `alt-t` | Ghostty |
+| `alt-o` | Microsoft Outlook |
+| `alt-s` | Slack |
+| `alt-w` | Obsidian |
+| `alt-p` | Adobe Premiere Pro |
+| `alt-shift-r` | Reload SketchyBar |
+
+**Service mode** — for fixing a broken layout
+
+`alt-shift-;` enters service mode. While there:
+
+| Keys | Action |
+|---|---|
+| `esc` | Reload config + exit |
+| `r` | Flatten workspace tree (undo weird splits) |
+| `f` | Toggle focused window between floating and tiling |
+| `backspace` | Close every window in workspace except focused |
+| `alt-shift-h/j/k/l` | Join with neighbor in that direction (changes split orientation) |
+
+**Conflicts to know about**
+
+These cmd combos are intercepted globally, which means they no longer work inside apps:
+
+| Combo | What you lose |
+|---|---|
+| `cmd-1..9` | App tab-switching (Ghostty / Chrome / Windsurf / Finder view modes) |
+| `cmd-←/→` | Text nav to start/end of line (use Home/End or `opt-←/→` for word nav) |
+| `cmd-↑/↓` | Text nav to top/bottom of document (use `fn-↑/↓`) |
+
+`cmd-tab` stays native for macOS's app switcher. `cmd-shift-<n>` is free.
+
+### Sketchybar cheat sheet
+
+| Element | Behavior |
+|---|---|
+| Workspace pill (1–8) | Click to switch. Hot pink = active. Magenta-pink border = notification in this workspace. |
+| `TILES` / `H-ACC` / `FLOAT` pill | Click: tiles ↔ accordion. Shift+click: flip orientation. Alt+click: float ↔ tile. |
+| Calendar pill (right side) | Shows next timed event. Click to open Calendar.app. |
+| Bar | Identical on every attached monitor. |
 
 ## Re-homing windows when rules don't match open apps
 
