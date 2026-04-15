@@ -21,6 +21,7 @@ brew "eza"                     # Better ls
 brew "zoxide"                  # Better cd
 brew "yazi"                    # TUI file manager
 brew "thefuck"                 # Command correction
+brew "tmux"                    # Terminal multiplexer
 
 # ---- Window manager / bar / borders ----
 cask "nikitabobko/tap/aerospace"       # i3-like tiling WM for macOS

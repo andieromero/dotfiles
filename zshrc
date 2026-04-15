@@ -8,13 +8,36 @@ export PATH="$HOME/.local/bin:$PATH"
 # The next line updates PATH for egcli command.
 if [ -f "$HOME/Library/Group Containers/FELUD555VC.group.com.egnyte.DesktopApp/CLI/egcli.inc" ]; then . "$HOME/Library/Group Containers/FELUD555VC.group.com.egnyte.DesktopApp/CLI/egcli.inc"; fi
 
-# ZSH-Autosuggestions
-# plugins=(git zsh-autosuggestions zsh-syntax-highlighting web-search)
-# Zsh Autosuggestions
-source ~/.zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
+# ---- Zsh plugins (installed via Homebrew + git clones) ----
+# Order matters: zsh-autocomplete first, then syntax-highlighting, then
+# autosuggestions last. Each line is guarded with -f so a missing install
+# skips silently instead of erroring.
 
-# Zsh Syntax Highlighting
-source ~/.zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+# zsh-autocomplete — dropdown of suggestions as you type (arrows + Enter)
+# Install: git clone --depth 1 https://github.com/marlonrichert/zsh-autocomplete.git ~/.zsh/plugins/zsh-autocomplete
+[ -f ~/.zsh/plugins/zsh-autocomplete/zsh-autocomplete.plugin.zsh ] && \
+  source ~/.zsh/plugins/zsh-autocomplete/zsh-autocomplete.plugin.zsh
+
+# Configure autocomplete behavior (no-op if plugin not loaded)
+zstyle ':autocomplete:*' min-input 1                      # start suggesting after 1 character
+zstyle ':autocomplete:*' delay 0.0                        # instant suggestions
+zstyle ':autocomplete:*' list-lines 10                    # max dropdown size
+zstyle ':autocomplete:history-search:*' list-lines 10
+zstyle ':autocomplete:tab:*' insert-unambiguous yes       # tab only fills in unique part
+zstyle ':autocomplete:tab:*' widget-style menu-select     # menu on tab
+zstyle ':autocomplete:*' fzf-completion yes               # use fzf for long completion lists
+
+# Make arrow keys go through dropdown entries instead of history at the prompt
+bindkey '\e[A' up-line-or-search
+bindkey '\e[B' down-line-or-search
+
+# zsh-syntax-highlighting — colorize commands as you type
+[ -f /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ] && \
+  source /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+
+# zsh-autosuggestions — gray inline history suggestion, accept with →
+[ -f /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh ] && \
+  source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 
 
 # ---- FZF -----
@@ -40,8 +63,9 @@ _fzf_compgen_dir() {
   fd --type=d --hidden --exclude .git . "$1"
 }
 
-# FZF-GIT
-source ~/fzf-git.sh/fzf-git.sh
+# FZF-GIT — optional; clone with:
+#   git clone https://github.com/junegunn/fzf-git.sh ~/fzf-git.sh
+[ -f ~/fzf-git.sh/fzf-git.sh ] && source ~/fzf-git.sh/fzf-git.sh
 
 # --- setup fzf theme ---
 fg="#CBE0F0"
@@ -94,9 +118,17 @@ alias y="yazi"
 # 1Password SSH Keys
 export SSH_AUTH_SOCK="$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
 
+# ---- Project paths ----
+# Environment variables pointing at the repos. Use these from any command:
+#   cd $TWIN
+#   wind $FLOWEN
+#   ls $TWIN/src
+# Exported so tools like `make`, `git`, and sub-shells can see them too.
+export TWIN="$HOME/Flowen/twin-andie"
+export FLOWEN="$HOME/Flowen/flowen-os"
+
 # ---- Project session helpers ----
 # Each function cd's into a repo and sets the Ghostty tab/pane title.
-# Usage: run the function name in any Ghostty tab or split.
 
 # Set a terminal title that sticks across prompts (overrides auto-title from
 # shell integration). Call once; re-run if your title gets clobbered.
@@ -109,12 +141,12 @@ set_term_title() {
 }
 
 twin-andie() {
-  cd ~/Flowen/twin-andie || return
+  cd "$TWIN" || return
   set_term_title "Andie's TWIN"
 }
 
 flowen-os() {
-  cd ~/Flowen/flowen-os || return
+  cd "$FLOWEN" || return
   set_term_title "flowen-os"
 }
 
@@ -131,8 +163,8 @@ export VISUAL="windsurf --wait"
 #   cd ~twin         # jumps to the twin-andie repo
 #   ls ~flowen/src   # tab-completes into the repo
 #   vim ~flowen      # works with any command
-hash -d twin=~/Flowen/twin-andie
-hash -d flowen=~/Flowen/flowen-os
+hash -d twin="$TWIN"
+hash -d flowen="$FLOWEN"
 hash -d dots=~/.config
 
 # Quick-edit shortcuts for this dotfiles repo
@@ -140,3 +172,80 @@ alias zshconfig='$EDITOR ~/.config/zshrc'
 alias aeroconfig='$EDITOR ~/.config/aerospace/aerospace.toml'
 alias barconfig='$EDITOR ~/.config/sketchybar/sketchybarrc'
 alias ghosttyconfig='$EDITOR ~/.config/ghostty/config'
+alias tmuxconfig='$EDITOR ~/.config/tmux/tmux.conf'
+
+# ---- Git aliases (cherry-picked from oh-my-zsh + dev setup) ----
+alias g='git'
+alias gs='git status -sb'
+alias gst='git status'
+alias ga='git add'
+alias gaa='git add --all'
+alias gan='git add --all -N'
+alias gco='git checkout'
+alias gb='git branch'
+alias gcm='git commit -m'
+alias gci='git commit -m'
+alias gca='git commit --amend --no-edit'
+alias gp='git push'
+alias gpf='git push --force-with-lease'
+alias gl='git pull'
+alias glog='git log --oneline --graph --decorate'
+alias gloga='git log --oneline --graph --decorate --all'
+alias gd='git diff'
+alias gds='git diff --staged'
+alias gfa='git fetch --all --prune'
+alias gdmb='git branch --merged | grep -v "\*" | xargs -n 1 git branch -d'
+alias grb='git rebase'
+alias grbi='git rebase -i'
+alias gsh='git stash'
+alias gshp='git stash pop'
+
+# ---- Shell behavior tuning ----
+setopt no_beep
+setopt auto_cd                    # type a dir name alone to cd into it
+setopt hist_ignore_all_dups       # no duplicate entries in history
+setopt hist_ignore_space          # skip history if command starts with a space
+setopt hist_expire_dups_first     # when trimming, lose oldest duplicates first
+setopt inc_append_history         # append to history file as commands run
+setopt share_history              # other terminals see new history immediately
+setopt hist_verify                # don't auto-execute history expansions
+setopt hist_reduce_blanks         # collapse extra whitespace in history
+
+HISTFILE=$HOME/.zsh_history
+HISTSIZE=100000
+SAVEHIST=100000
+
+# ---- Completion improvements ----
+# Case-insensitive + partial-word + substring matching
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}' 'r:|[._-]=* r:|=*' 'l:|=* r:|=*'
+
+# Interactive menu: press Tab to open, arrow keys to navigate, Enter to select.
+# Also let left/right arrows move between entries in multi-column menus.
+zstyle ':completion:*' menu select
+zmodload -i zsh/complist
+bindkey -M menuselect 'h' vi-backward-char
+bindkey -M menuselect 'j' vi-down-line-or-history
+bindkey -M menuselect 'k' vi-up-line-or-history
+bindkey -M menuselect 'l' vi-forward-char
+
+# Color completion entries the same way ls does
+zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+
+# Group completions by type (commands, files, options) with headers
+zstyle ':completion:*' group-name ''
+zstyle ':completion:*:descriptions' format '%F{yellow}%B%d%b%f'
+zstyle ':completion:*:warnings' format '%F{red}no matches for: %d%f'
+
+# Complete from the middle of a word; show menu on the first Tab, not the second
+setopt complete_in_word
+setopt always_to_end
+setopt auto_menu
+unsetopt menu_complete
+
+# ---- Useful keybindings ----
+bindkey "^R" history-incremental-search-backward  # Ctrl-R fuzzy history
+autoload edit-command-line
+zle -N edit-command-line
+bindkey '^F' edit-command-line                    # Ctrl-F opens current command in $EDITOR
+bindkey '^[b' backward-word                       # Alt-b
+bindkey '^[f' forward-word                        # Alt-f

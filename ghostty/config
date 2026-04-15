@@ -9,3 +9,7 @@ macos-option-as-alt = true
 # free-floating window that AeroSpace would tile into a split.
 macos-titlebar-style = native
 window-new-tab-position = end
+
+# Every new Ghostty window opens in the twin-andie repo by default.
+# Override per-session by launching from another cwd.
+working-directory = /Users/casadolimiar/Flowen/twin-andie

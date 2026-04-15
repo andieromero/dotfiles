@@ -134,7 +134,7 @@ sketchybar --add item chevron left \
 # Front app (focused app name) + layout-mode indicator (tiles/accordion/floating)
 source "$ITEM_DIR/front_app.sh"
 
-sketchybar --add item front_app_layout left \
+sketchybar --add item front_app_layout right \
   --set front_app_layout \
     update_freq=2 \
     icon.drawing=on \

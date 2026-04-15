@@ -28,10 +28,11 @@ Intel Macs will technically work but paths in `zshrc` point to `/opt/homebrew`; 
 |---|---|
 | `Brewfile` | Homebrew package manifest (single source of truth for installed tools) |
 | `aerospace/aerospace.toml` | [AeroSpace](https://github.com/nikitabobko/AeroSpace) — i3-like tiling window manager |
-| `sketchybar/` | [SketchyBar](https://github.com/FelixKratz/SketchyBar) — custom top bar |
+| `sketchybar/` | [SketchyBar](https://github.com/FelixKratz/SketchyBar) — custom top bar (hot pink/purple theme) |
 | `borders/bordersrc` | [JankyBorders](https://github.com/FelixKratz/JankyBorders) — active window borders |
-| `ghostty/config` | [Ghostty](https://ghostty.org) terminal |
-| `karabiner/karabiner.json` | [Karabiner-Elements](https://karabiner-elements.pqrs.org) keyboard remapping |
+| `ghostty/config` | [Ghostty](https://ghostty.org) terminal (opens to `$TWIN` by default) |
+| `karabiner/karabiner.json` | [Karabiner-Elements](https://karabiner-elements.pqrs.org) keyboard remapping (caps lock → hyper) |
+| `tmux/tmux.conf` | [tmux](https://github.com/tmux/tmux) terminal multiplexer (prefix `Ctrl+a`) |
 | `starship.toml` | [Starship](https://starship.rs) prompt |
 | `zshrc` | zsh shell config (symlinked to `~/.zshrc`) |
 | `gh/` | GitHub CLI config |
@@ -58,6 +59,11 @@ brew services start sketchybar
 brew services start borders
 open -a AeroSpace
 open -a Karabiner-Elements
+
+# 6. Install optional zsh plugins (not in Brewfile because they're git clones)
+mkdir -p ~/.zsh/plugins
+git clone --depth 1 https://github.com/marlonrichert/zsh-autocomplete.git ~/.zsh/plugins/zsh-autocomplete
+git clone https://github.com/junegunn/fzf-git.sh ~/fzf-git.sh    # optional
 ```
 
 ## macOS permissions per app
@@ -105,21 +111,23 @@ On next login AeroSpace's `on-window-detected` rules route each window to its de
 
 Two-monitor flow (when docked), with graceful single-monitor fallback when on the go.
 
-| WS | Monitor when docked | Pinned anchor | Launch hotkey |
-|----|--------------------|---------------|---------------|
-| 1 | USB C2 (reference) | Free / scratch | — |
-| 2 | USB C2 | Slack | `alt-s` |
-| 3 | USB C2 | Free | — |
-| 4 | USB C2 | Free | — |
-| 5 | HP E27 G5 (active) | Ghostty | `alt-t` |
-| 6 | HP E27 G5 | Windsurf | `alt-c` |
-| 7 | HP E27 G5 | Chrome | `alt-b` |
-| 8 | HP E27 G5 | **Overflow / inbox** — unpinned apps land here | — |
-| 9 | USB C2 (hidden from bar) | Scratch (Obsidian / Messages) | `alt-w` |
+| WS | Monitor when docked | Typical purpose (not pinned) |
+|----|--------------------|-----------------------------|
+| 1 | USB C2 (reference) | Free / scratch |
+| 2 | USB C2 | Free / chat |
+| 3 | USB C2 | Free |
+| 4 | USB C2 | Free |
+| 5 | HP E27 G5 (active) | Free / terminal-ish |
+| 6 | HP E27 G5 | Free / code-ish |
+| 7 | HP E27 G5 | Free / browser-ish |
+| 8 | HP E27 G5 | Free / overflow |
+| 9 | USB C2 (hidden from bar) | Scratch |
 
-Only Ghostty, Windsurf, Chrome, and Slack are pinned. Every other app falls through to workspace 8 via a catch-all rule — use the sketchybar inbox icon on WS 8 as your reference for "what did I just open". Send anything out of 8 to a specific workspace with `caps+N`.
+**No app-to-workspace auto-routing.** Every new window opens on whatever workspace you're currently looking at and tiles with the focused container. This keeps the workflow fluid — use `caps+N` (hyper key) to relocate windows after the fact, and glance at the sketchybar app icons to see where each app currently lives.
 
-When only one display is attached, every pinned monitor name falls back to `main`, so all workspaces collapse onto that one screen.
+The monitor pins are by **explicit display name** (USB C2, HP E27 G5) so the layout is independent of macOS's main-display setting. When only one display is attached, every workspace falls back to `main` — all 9 workspaces collapse onto the one screen.
+
+**Exception — always-float apps:** System Settings, Calculator, QuickTime, Finder "Get Info" popups, and 1Password Quick Access always open as floating windows regardless of workspace.
 
 ### Keybindings cheat sheet
 
@@ -157,6 +165,9 @@ All keybindings unify around `cmd` for window management so the whole flow is on
 | `cmd-.` | Tiles ↔ accordion |
 | `cmd-0` | Fullscreen toggle |
 | `cmd-'` | Float ↔ tile toggle |
+| `cmd-shift-w` | Close focused window |
+| `cmd-w` | Close tab/window (app-level, native macOS) |
+| `cmd-q` | Quit app entirely |
 | `alt-e` / `alt-,` / `alt-f` | Same toggles, alt-prefixed backups |
 
 **App launchers**
@@ -198,66 +209,59 @@ These cmd combos are intercepted globally, which means they no longer work insid
 
 ### Sketchybar cheat sheet
 
+Hot pink / hot purple theme. Shows workspaces 1–8 with themed Nerd Font icons; workspace 9 is hidden (reachable only via `cmd-9`).
+
 | Element | Behavior |
 |---|---|
-| Workspace pill (1–8) | Click to switch. Hot pink = active. Magenta-pink border = notification in this workspace. |
-| `TILES` / `H-ACC` / `FLOAT` pill | Click: tiles ↔ accordion. Shift+click: flip orientation. Alt+click: float ↔ tile. |
-| Calendar pill (right side) | Shows next timed event. Click to open Calendar.app. |
-| Bar | Identical on every attached monitor. |
+| Workspace pill (1–8) | Click to switch. Soft pink = inactive, **hot pink = active**, magenta-pink border = notification in one of the apps on that workspace. Each pill shows `<number> <themed icon>` plus live app-icon strip using sketchybar-app-font. |
+| Chevron `` | Visual separator between workspace pills and front-app text. |
+| Front app label | Name of the currently-focused app. |
+| `TILES` / `H-ACC` / `V-ACC` / `FLOAT` pill (right) | Click: tiles ↔ accordion. Shift+click: flip H/V. Alt+click: float ↔ tile. |
+| Clock / volume / battery | Standard right-side status. |
+| Calendar pill (right) | Shows next timed event from macOS Calendar (auto-syncs Google Calendar if added to Internet Accounts). Click to open Calendar.app. |
+| Bar appearance | Dark violet bar, identical on every attached monitor (`display=all`). |
 
-## Re-homing windows when rules don't match open apps
+### Shell extras
 
-`on-window-detected` rules only fire when a window is **created**, not on already-open windows. If you reload the AeroSpace config while apps are running, they stay where they are. Two ways to fix:
+| Keys / Command | Behavior |
+|---|---|
+| Type first character → dropdown | zsh-autocomplete shows live completions. Arrow keys navigate, Enter selects, Esc dismisses. |
+| `Ctrl+R` | Fuzzy history search |
+| `Ctrl+F` | Open current command line in `$EDITOR` (Windsurf) |
+| `→` (end of line) | Accept zsh-autosuggestions inline suggestion from history |
+| `cd ~twin` / `cd ~flowen` / `cd ~dots` | Named directory hashes |
+| `$TWIN` / `$FLOWEN` | Env vars pointing at those repo paths |
+| `twin` / `flowen` | Functions that cd into repo + set Ghostty tab title |
+| `wind <path>` | Open files/dirs in Windsurf |
+| `zshconfig` / `aeroconfig` / `barconfig` / `ghosttyconfig` / `tmuxconfig` | Quick-edit aliases |
+| Git aliases | `g`, `gs`, `ga`, `gaa`, `gco`, `gci`, `gca`, `gp`, `gpf`, `gl`, `glog`, `gd`, `gds`, `gfa`, `gdmb`, `grb`, `gsh`, `gshp` |
 
-**Manual:** focus each stray window, press `alt-shift-<n>` to send it to the correct workspace.
+## Resetting workspace layouts
 
-**Full reset (recommended after editing rules):**
+Since there's no per-app auto-routing, windows stay where you put them. If a workspace's tile tree gets tangled (stuck floating states, weird splits), use service mode to reset it:
+
+- `alt-shift-;` → enter service mode → `r` (flatten tree) → `esc` (exit)
+
+Full reset of every workspace (run in Ghostty):
 
 ```bash
-# Quit apps that may be in the wrong workspace. Keep Ghostty open — that's where you're typing.
-for app in "Google Chrome" "Windsurf" "Slack" "WhatsApp" "Microsoft Outlook" \
-           "Obsidian" "Plexamp" "Spotify" "Messages" "zoom.us"; do
-  osascript -e "tell application \"$app\" to quit" 2>/dev/null
+for ws in 1 2 3 4 5 6 7 8 9; do
+  aerospace workspace $ws
+  aerospace layout tiles
+  aerospace flatten-workspace-tree
 done
-sleep 3
-
-# Reload config and relaunch in order — each window hits its rule fresh.
-aerospace reload-config
-open -a "Google Chrome"
-open -a "Windsurf"
-open -a "Slack"
-open -a "Microsoft Outlook"
-open -a "Obsidian"
-sleep 2
-
-# Verify — print which workspace each window ended up on.
-aerospace list-windows --all --format "%{workspace} | %{app-name} | %{window-title}" | sort
+aerospace workspace 5
 ```
 
-Expected result:
-
-```
-1 | Google Chrome | ...
-2 | Windsurf | ...
-3 | Ghostty | ...
-4 | Microsoft Outlook | ...
-6 | Slack | ...
-9 | Obsidian | ...
-```
-
-If an app lands on the wrong workspace, the bundle ID in the rule doesn't match. Get the actual ID with:
+Inspect where each window currently lives:
 
 ```bash
-osascript -e 'id of app "Windsurf"'
+aerospace list-windows --all --format "%{workspace} | %{window-layout} | %{app-name}" | sort
 ```
 
-…and update the matching `if.app-id = '...'` in `aerospace/aerospace.toml`.
+### If a window is stuck floating
 
-### Why apps sometimes don't auto-assign
-
-- **The app launched before AeroSpace was running** — window-created event wasn't captured. Check `pgrep -x AeroSpace` and restart AeroSpace first.
-- **"Reopen windows on quit" is restoring old positions** — macOS can bypass the rule. Use the `osascript quit` loop above to clear saved state.
-- **Bundle ID drift** — app updates can change their identifier (e.g., `com.codeium.windsurf` vs `com.exafunction.windsurf`). Use `osascript -e 'id of app "<Name>"'` to check.
+Focus it, then `cmd+'` (float↔tile toggle). If the window snaps into the tile, the tree was fine and just the window was floating.
 
 ## Working with the Brewfile
 
@@ -304,6 +308,7 @@ brew bundle cleanup --force --file=~/.config/Brewfile
 | JankyBorders | `brew services restart borders` | — |
 | zsh | `exec zsh` | — |
 | Ghostty | `Cmd+Shift+,` or quit & reopen | — |
+| tmux | `tmux source-file ~/.config/tmux/tmux.conf` | `prefix r` (prefix = `Ctrl+a`) |
 
 ## Health check
 

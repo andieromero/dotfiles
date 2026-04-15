@@ -130,6 +130,7 @@ cmd-slash       = 'layout accordion horizontal vertical'  # accordion H <-> V
 cmd-period      = 'layout tiles accordion'                # tiles <-> accordion
 cmd-0           = 'fullscreen'                            # fullscreen toggle
 cmd-quote       = 'layout floating tiling'                # float <-> tile
+cmd-shift-w     = 'close'                                 # close focused window
 # See: https://nikitabobko.github.io/AeroSpace/commands#focus
 alt-h = 'focus left'
 alt-j = 'focus down'
@@ -210,78 +211,37 @@ alt-shift-l = ['join-with right', 'mode main']
 
 
 # ---- Auto-assign apps to workspaces ----
-# Pinned anchors only — everything else is unpinned and falls through to the
-# catch-all at the bottom, which lands it on workspace 8 (overflow/inbox).
-#
-# Layout:
-#   SECONDARY when docked:   1 free/scratch, 2 chat (Slack), 3 free, 4 free
-#   MAIN (always laptop):    5 Ghostty, 6 Windsurf, 7 Chrome, 8 overflow
-#
-# Each pinned rule ends with `check-further-callbacks = false` so it doesn't
-# cascade into the catch-all.
+# Every new window opens on the CURRENT workspace and tiles with the focused
+# container — that's AeroSpace's default behavior when no rule matches. No
+# pinned anchors, no catch-all. Use caps+N (hyper) to relocate afterwards.
 
-# WS 5: Terminal (Ghostty floats so its tabs/splits behave natively)
+# Force Ghostty windows to tile on launch (overrides any stale floating state).
 [[on-window-detected]]
 if.app-id = 'com.mitchellh.ghostty'
-check-further-callbacks = true
-run = ['move-node-to-workspace 5', 'layout floating']
+run = ['layout tiling']
 
-# WS 6: Code
-[[on-window-detected]]
-if.app-id = 'com.exafunction.windsurf'
-check-further-callbacks = false
-run = ['move-node-to-workspace 6']
-
-[[on-window-detected]]
-if.app-id = 'com.codeium.windsurf'
-check-further-callbacks = false
-run = ['move-node-to-workspace 6']
-
-# WS 7: Browser
-[[on-window-detected]]
-if.app-id = 'com.google.Chrome'
-check-further-callbacks = false
-run = ['move-node-to-workspace 7']
-
-# WS 2: Chat (Slack pinned; WhatsApp is unpinned and goes to overflow)
-[[on-window-detected]]
-if.app-id = 'com.tinyspeck.slackmacgap'
-check-further-callbacks = false
-run = ['move-node-to-workspace 2']
-
-# ---- Always-float apps (never tile, stay on current workspace) ----
+# ---- Always-float apps (small utility windows that look weird tiled) ----
 [[on-window-detected]]
 if.app-id = 'com.apple.systempreferences'
-check-further-callbacks = false
 run = ['layout floating']
 
 [[on-window-detected]]
 if.app-id = 'com.apple.calculator'
-check-further-callbacks = false
 run = ['layout floating']
 
 [[on-window-detected]]
 if.app-id = 'com.apple.QuickTimePlayerX'
-check-further-callbacks = false
 run = ['layout floating']
 
 [[on-window-detected]]
 if.app-id = 'com.apple.finder'
 if.window-title-regex-substring = 'Info'
-check-further-callbacks = false
 run = ['layout floating']
 
 [[on-window-detected]]
 if.app-id = 'com.1password.1password'
 if.window-title-regex-substring = 'Quick Access'
-check-further-callbacks = false
 run = ['layout floating']
-
-# ---- Catch-all: unpinned apps land on workspace 8 (overflow/inbox) ----
-# This is the last rule. Any window not already matched above falls through
-# here and gets routed to 8. From 8 you can send it wherever with alt-shift-N.
-[[on-window-detected]]
-run = ['move-node-to-workspace 8']
 
 # Workspace -> monitor force assignment.
 #

@@ -682,6 +682,12 @@ function icon_map() {
   "WhatsApp" | "‎WhatsApp")
     icon_result=":whats_app:"
     ;;
+  "Windsurf")
+    icon_result=":windsurf:"
+    ;;
+  "Ghostty")
+    icon_result=":ghostty:"
+    ;;
   "Xcode")
     icon_result=":xcode:"
     ;;
