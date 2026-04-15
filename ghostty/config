@@ -5,8 +5,9 @@ mouse-hide-while-typing = true
 window-decoration = true
 macos-option-as-alt = true
 
-# Use native macOS tabs so Cmd+T produces a grouped tab instead of a new
-# free-floating window that AeroSpace would tile into a split.
+# Native macOS tabs. Cmd+T creates a grouped window that AeroSpace sees as a
+# new tile; workspace splits between the two Ghostty windows. Use the
+# re-tile flow in the README when this happens (close or merge back).
 macos-titlebar-style = native
 window-new-tab-position = end
 

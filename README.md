@@ -310,6 +310,99 @@ brew bundle cleanup --force --file=~/.config/Brewfile
 | Ghostty | `Cmd+Shift+,` or quit & reopen | — |
 | tmux | `tmux source-file ~/.config/tmux/tmux.conf` | `prefix r` (prefix = `Ctrl+a`) |
 
+## tmux auto-attach
+
+Every Ghostty tab automatically attaches to (or creates) a tmux session named `main` when the shell starts. This means:
+
+- **Your shell history and running processes survive** closing Ghostty, crashes, and even reboots (tmux stays alive until the Mac shuts down).
+- **Every new Ghostty tab joins the same session**, so you can open ten tabs and they're all windows inside one tmux session — switch between them with tmux's own `prefix <number>` or `Ctrl+a n / p`.
+- **Prompt + sketchybar-style status bar at the bottom** — that hot-pink strip is how you know tmux is running.
+
+### Checking whether you're in tmux
+
+```bash
+echo $TMUX          # prints a path when inside tmux, empty when not
+tmux ls             # list sessions (works inside and outside)
+```
+
+### Starting fresh without tmux
+
+Set `NO_TMUX=1` before launching zsh:
+
+```bash
+NO_TMUX=1 zsh
+```
+
+Useful when debugging, running one-shot commands, or copying a big block to a shell you don't want tmux to capture.
+
+### Detaching without closing
+
+`Ctrl+a d` (prefix + d) detaches. The session keeps running in the background — close Ghostty, reopen it, and the next tab auto-reattaches to exactly where you left off.
+
+## Ghostty tabs ↔ AeroSpace interaction
+
+Ghostty is set to **native macOS tabs** (`macos-titlebar-style = native`). That means when you press **`Cmd+T`** to open a new tab, macOS creates a grouped window — which AeroSpace sees as a separate tile. Your workspace will split in half to accommodate it.
+
+This is a deliberate tradeoff: native tabs give you the nicer macOS UI (Cmd+Shift+[ / Cmd+Shift+] to cycle, merge/unmerge via View menu, proper "Show all tabs" with Cmd+Option+L) but require you to manage the AeroSpace split.
+
+### Reclaiming a single Ghostty window after Cmd+T splits
+
+**Option A — Close the second tab and go back to one window:**
+
+- `Cmd+W` → closes the active tab. If that was the only other tab, you're back to a single Ghostty window and AeroSpace re-flows the workspace to fill the space.
+
+**Option B — Merge the two windows back into one with native tabs:**
+
+- Click inside the second Ghostty window → View menu → **Merge All Windows**.
+- macOS collapses them back into one window with two tabs at the top. AeroSpace sees only one window again and the split disappears.
+
+**Option C — Move the second tab to a different workspace:**
+
+- Focus the new Ghostty window → `caps+<N>` (hyper-key, N = 1..9) sends it to workspace N. Your original workspace returns to the pre-split tile.
+
+**Option D — Cycle existing tabs without Cmd+T (no split at all):**
+
+- `Cmd+Shift+]` / `Cmd+Shift+[` cycles through existing tabs.
+- `Cmd+Opt+L` opens "Show all tabs" overview.
+- These don't create new windows, so AeroSpace is quiet.
+
+### If this gets annoying
+
+Switch Ghostty to **internal tabs** — change `~/.config/ghostty/config` to:
+
+```
+macos-titlebar-style = tabs
+```
+
+Quit + reopen Ghostty. Tabs become purely Ghostty-drawn (Ghostty's own tab strip replaces the macOS title bar). AeroSpace never sees the new tabs as windows, so `Cmd+T` stops splitting — at the cost of losing native tab conveniences listed above.
+
+### Most-used tmux keys (prefix is `Ctrl+a`)
+
+| Keys | Action |
+|---|---|
+| `prefix c` | New tmux window |
+| `prefix \|` or `prefix \\` | Split pane right |
+| `prefix -` | Split pane down |
+| `prefix h/j/k/l` | Navigate panes (vim-style) |
+| `prefix H/J/K/L` | Resize panes (repeatable) |
+| `prefix z` | Zoom focused pane to fullscreen (toggle) |
+| `prefix <n>` | Switch to window N |
+| `prefix n` / `prefix p` | Next / previous window |
+| `prefix ,` | Rename window |
+| `prefix [` | Enter copy mode (vi keys; `v` select, `y` yank to macOS clipboard) |
+| `prefix d` | Detach (session keeps running) |
+| `prefix r` | Reload `tmux.conf` |
+
+### Session management
+
+```bash
+tmux ls                    # list sessions
+tmux a                     # attach to the last session (defaults to "main")
+tmux a -t <name>           # attach to a specific session
+tmux new -s <name>         # create a new named session
+tmux kill-session -t main  # nuke the "main" session (all windows/panes die)
+```
+
 ## Health check
 
 ```bash

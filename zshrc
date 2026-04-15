@@ -118,6 +118,55 @@ alias y="yazi"
 # 1Password SSH Keys
 export SSH_AUTH_SOCK="$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
 
+# ---- Ghostty helpers (drive the app via AppleScript) ----
+# Ghostty doesn't expose a full CLI, so these poke at its menu bar instead.
+
+# Close the active Ghostty tab from the terminal.
+ghostty-close-tab() {
+  osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke "w" using {command down}'
+}
+
+# Merge every open Ghostty window into a single tabbed window.
+# After this runs, AeroSpace sees one window with N tabs instead of N tiles.
+ghostty-merge() {
+  osascript <<'EOF'
+tell application "Ghostty" to activate
+tell application "System Events"
+  tell process "Ghostty"
+    try
+      click menu item "Merge All Windows" of menu "Window" of menu bar 1
+    on error
+      -- Fallback to the keystroke if the menu item is named differently
+      keystroke "m" using {command down, shift down, control down}
+    end try
+  end tell
+end tell
+EOF
+}
+
+# Cycle to the next tab without opening a new one.
+ghostty-next-tab() {
+  osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke "]" using {command down, shift down}'
+}
+
+ghostty-prev-tab() {
+  osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke "[" using {command down, shift down}'
+}
+
+alias gt-close='ghostty-close-tab'
+alias gt-merge='ghostty-merge'
+alias gt-next='ghostty-next-tab'
+alias gt-prev='ghostty-prev-tab'
+
+# ---- Auto-attach to tmux ----
+# Every interactive shell that isn't already inside tmux attaches to (or creates)
+# a session named "main". Ghostty tabs all share this session, so your work
+# persists across terminal restarts and crashes.
+# To stay out of tmux for a specific session, prefix the command:  NO_TMUX=1 zsh
+if command -v tmux >/dev/null 2>&1 && [ -z "$TMUX" ] && [ -z "$NO_TMUX" ] && [ -n "$PS1" ]; then
+  tmux attach -t main 2>/dev/null || tmux new -s main
+fi
+
 # ---- Project paths ----
 # Environment variables pointing at the repos. Use these from any command:
 #   cd $TWIN
