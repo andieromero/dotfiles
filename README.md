@@ -2,6 +2,26 @@
 
 My personal macOS dev environment, managed out of `~/.config` and tracked in git.
 
+## Target machine
+
+Built and tested on:
+
+- **Model:** MacBook Pro (MacBookPro18,1 — 14" 2021)
+- **Chip:** Apple M1 Pro, 10 cores (8 performance + 2 efficiency)
+- **Memory:** 16 GB
+- **OS:** macOS 26.4 (Darwin 25.4.0)
+- **Shell:** zsh 5.x (ships with macOS)
+- **Homebrew prefix:** `/opt/homebrew` (Apple Silicon default)
+
+To capture your own machine's exact specs for future reference:
+
+```bash
+system_profiler SPHardwareDataType SPSoftwareDataType | \
+  grep -E "Model Name|Model Identifier|Chip|Memory|System Version|Kernel Version"
+```
+
+Intel Macs will technically work but paths in `zshrc` point to `/opt/homebrew`; on Intel the prefix is `/usr/local`, so search-and-replace those before sourcing.
+
 ## What's in here
 
 | Path | Tool |
@@ -40,38 +60,148 @@ open -a AeroSpace
 open -a Karabiner-Elements
 ```
 
-After step 5, grant the one-time macOS permissions these tools need:
+## macOS permissions per app
 
-- **Karabiner** — System Settings → Privacy & Security → approve the driver, then grant Input Monitoring + Accessibility.
-- **SketchyBar** — System Settings → Privacy & Security → Screen Recording → enable `sketchybar`, then `brew services restart sketchybar`.
-- **AeroSpace** — will prompt for Accessibility on first launch.
+Most of these tools need permissions that can only be granted through **System Settings → Privacy & Security**. Without them, the tools will silently fail or behave partially. Grant every permission below on first install.
+
+| App | Permission | Where | Why |
+|---|---|---|---|
+| **AeroSpace** | Accessibility | Privacy & Security → Accessibility | Needs to move, resize, and focus windows. Prompted on first launch. |
+| **SketchyBar** | Screen Recording | Privacy & Security → Screen Recording | Reads window/app info to render icons. Toggle **off then on** if already listed — macOS needs the re-toggle to apply. Then `brew services restart sketchybar`. |
+| **JankyBorders** | Accessibility + Screen Recording | Privacy & Security → Accessibility & Screen Recording | Draws border overlays and needs to know which window is focused. |
+| **Karabiner-Elements** | Input Monitoring + Accessibility + Driver approval | Privacy & Security (all three) | The driver is a system extension — approve it first, then grant Input Monitoring and Accessibility. Reboot may be needed after driver approval. |
+| **Ghostty** | Automation (optional) | Privacy & Security → Automation | Only if you invoke AppleScript from the terminal. Not required for daily use. |
+| **Windsurf / Cursor / VS Code** | Accessibility (optional) | Privacy & Security → Accessibility | Only needed if you use editor features that drive other apps. |
+| **1Password** | Accessibility | Privacy & Security → Accessibility | For global shortcut (Cmd+Shift+Space) and browser integration. |
+| **Claude Code** | Full Disk Access (optional) | Privacy & Security → Full Disk Access | Only if you point it at directories outside your home (Library, System). |
+
+Additional global setting:
+
+- **System Settings → Control Center → Menu Bar Only → Automatically hide and show the menu bar → Always.** Hides the native macOS menu bar so SketchyBar is the only top bar visible. Equivalent terminal command: `defaults write NSGlobalDomain _HIHideMenuBar -bool true && killall SystemUIServer`.
+
+## Auto-launch apps on login (AeroSpace 0.19+)
+
+`after-login-command` was deprecated in AeroSpace 0.19. Use macOS Login Items instead:
+
+**GUI:** System Settings → General → Login Items & Extensions → Open at Login → add Chrome, Ghostty, Windsurf, Slack.
+
+**Terminal:**
+
+```bash
+for app in "Google Chrome" "Ghostty" "Windsurf" "Slack"; do
+  osascript -e "tell application \"System Events\" to make login item at end with properties {path:\"/Applications/${app}.app\", hidden:false}"
+done
+```
+
+Verify:
+
+```bash
+osascript -e 'tell application "System Events" to get the name of every login item'
+```
+
+On next login AeroSpace's `on-window-detected` rules route each window to its designated workspace automatically.
+
+## Workspace layout
+
+| WS | Monitor | Apps | Launch hotkey |
+|----|---------|------|---------------|
+| 1 | Main | Google Chrome | `alt-b` |
+| 2 | Main | Windsurf | `alt-c` |
+| 3 | Main | Ghostty | `alt-t` |
+| 4 | Main | Outlook / Word / Excel / PowerPoint | `alt-o` |
+| 5 | Main | Free / overflow | — |
+| 6 | Secondary when docked | Slack + WhatsApp | `alt-s` |
+| 7 | Secondary when docked | Plexamp + Spotify | — |
+| 8 | Secondary when docked | Zoom + Google Meet popouts | — |
+| 9 | Secondary when docked | Obsidian + Messages + scratch | `alt-w` (Obsidian) |
+
+Workspaces 6–9 are pinned to the secondary monitor and gracefully fall back to main when no second display is attached. Plug/unplug a monitor and workspaces migrate automatically.
+
+### AeroSpace cheat sheet
+
+| Keys | Action |
+|---|---|
+| `alt-h / j / k / l` | Focus window left / down / up / right |
+| `alt-shift-h / j / k / l` | Swap focused window with neighbor |
+| `alt-<n>` | Switch to workspace N |
+| `alt-shift-<n>` | Send focused window to workspace N |
+| `alt-tab` | Toggle last two workspaces |
+| `alt-shift-tab` | Move current workspace to the other monitor |
+| `alt-f` | Fullscreen focused window |
+| `alt-e` | Tile layout |
+| `alt-,` | Accordion layout |
+| `alt-shift-minus / equal` | Resize focused window smaller / larger |
+| `alt-shift-;` | Enter service mode (then `esc` reload, `r` flatten, `f` toggle float, `backspace` close others) |
+
+## Re-homing windows when rules don't match open apps
+
+`on-window-detected` rules only fire when a window is **created**, not on already-open windows. If you reload the AeroSpace config while apps are running, they stay where they are. Two ways to fix:
+
+**Manual:** focus each stray window, press `alt-shift-<n>` to send it to the correct workspace.
+
+**Full reset (recommended after editing rules):**
+
+```bash
+# Quit apps that may be in the wrong workspace. Keep Ghostty open — that's where you're typing.
+for app in "Google Chrome" "Windsurf" "Slack" "WhatsApp" "Microsoft Outlook" \
+           "Obsidian" "Plexamp" "Spotify" "Messages" "zoom.us"; do
+  osascript -e "tell application \"$app\" to quit" 2>/dev/null
+done
+sleep 3
+
+# Reload config and relaunch in order — each window hits its rule fresh.
+aerospace reload-config
+open -a "Google Chrome"
+open -a "Windsurf"
+open -a "Slack"
+open -a "Microsoft Outlook"
+open -a "Obsidian"
+sleep 2
+
+# Verify — print which workspace each window ended up on.
+aerospace list-windows --all --format "%{workspace} | %{app-name} | %{window-title}" | sort
+```
+
+Expected result:
+
+```
+1 | Google Chrome | ...
+2 | Windsurf | ...
+3 | Ghostty | ...
+4 | Microsoft Outlook | ...
+6 | Slack | ...
+9 | Obsidian | ...
+```
+
+If an app lands on the wrong workspace, the bundle ID in the rule doesn't match. Get the actual ID with:
+
+```bash
+osascript -e 'id of app "Windsurf"'
+```
+
+…and update the matching `if.app-id = '...'` in `aerospace/aerospace.toml`.
+
+### Why apps sometimes don't auto-assign
+
+- **The app launched before AeroSpace was running** — window-created event wasn't captured. Check `pgrep -x AeroSpace` and restart AeroSpace first.
+- **"Reopen windows on quit" is restoring old positions** — macOS can bypass the rule. Use the `osascript quit` loop above to clear saved state.
+- **Bundle ID drift** — app updates can change their identifier (e.g., `com.codeium.windsurf` vs `com.exafunction.windsurf`). Use `osascript -e 'id of app "<Name>"'` to check.
 
 ## Working with the Brewfile
 
 The Brewfile lives at `~/.config/Brewfile`. Most `brew bundle` commands default to looking for a `Brewfile` in the current directory, so either `cd ~/.config` first or pass `--file=~/.config/Brewfile`.
 
-**Install everything listed:**
-
 ```bash
+# Install everything listed
 brew bundle install --file=~/.config/Brewfile
-```
 
-**Check what's declared but not yet installed (or vice versa):**
-
-```bash
+# Check what's declared but not yet installed (or vice versa)
 brew bundle check --verbose --file=~/.config/Brewfile
-```
 
-**Capture the current machine state back into the Brewfile** (useful after installing something ad-hoc with `brew install` and realising you want to keep it):
-
-```bash
+# Capture current machine state back into the Brewfile
 brew bundle dump --force --file=~/.config/Brewfile
-# Review the diff, then commit
-```
 
-**Uninstall anything NOT in the Brewfile** (dangerous — prunes your system to exactly what's declared):
-
-```bash
+# Uninstall anything NOT in the Brewfile (dangerous)
 brew bundle cleanup --force --file=~/.config/Brewfile
 ```
 
@@ -101,14 +231,17 @@ brew bundle cleanup --force --file=~/.config/Brewfile
 | SketchyBar | `sketchybar --reload` | `alt-shift-r` |
 | JankyBorders | `brew services restart borders` | — |
 | zsh | `exec zsh` | — |
+| Ghostty | `Cmd+Shift+,` or quit & reopen | — |
 
 ## Health check
-
-One-liner to verify everything is up:
 
 ```bash
 for p in AeroSpace sketchybar borders karabiner_console_user_server; do
   pgrep -x "$p" >/dev/null && echo "✅ $p" || echo "❌ $p"
 done
 brew bundle check --verbose --file=~/.config/Brewfile
+aerospace list-workspaces --focused
+aerospace list-windows --all --format "%{workspace} | %{app-name}" | sort | head -20
 ```
+
+Expected: every service ✅, Brewfile satisfied, and windows distributed across the workspaces listed above.

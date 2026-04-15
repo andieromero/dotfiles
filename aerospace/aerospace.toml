@@ -1,10 +1,11 @@
 # Place a copy of this config to ~/.aerospace.toml
 # After that, you can edit ~/.aerospace.toml to your liking
 
-# You can use it to add commands that run after login to macOS user session.
-# 'start-at-login' needs to be 'true' for 'after-login-command' to work
-# Available commands: https://nikitabobko.github.io/AeroSpace/commands
-#after-login-command = []
+# after-login-command was deprecated in AeroSpace 0.19.0.
+# Auto-launch core apps via macOS Login Items instead:
+#   System Settings -> General -> Login Items & Extensions -> Open at Login
+# Add: Google Chrome, Ghostty, Windsurf, Slack. Each app's on-window-detected
+# rule below routes it to the right workspace when its window appears.
 
 # You can use it to add commands that run after AeroSpace startup.
 # 'after-startup-command' is run after 'after-login-command'
@@ -69,14 +70,13 @@ preset = 'qwerty'
 inner.horizontal = 8
 inner.vertical = 8
 outer.bottom = 5
-# outer.top = [{ monitor.main = 40}, 40]
 outer.top = [
-  { monitor."built-in" = 10 },   # Matches MacBook screen (with the notch)
-  { monitor."main" = 45 },       # Applies to whichever display is currently "main"
-  45                             # Fallback default for all others
+  { monitor."built-in" = 10 },
+  { monitor."main" = 50 },
+  50
 ]
-outer.right = 5
 outer.left = 5
+outer.right = 5
 
 # 'main' binding mode declaration
 # See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes
@@ -109,10 +109,13 @@ outer.left = 5
 # '''
 
 # App shortcuts
-alt-b = 'exec-and-forget open -a /Applications/Brave\ Browser.app'
-alt-t = 'exec-and-forget open -a /Applications/Ghostty.app'
-alt-p = 'exec-and-forget open -a /Applications/Adobe\ Premiere\ Pro\ 2024/Adobe\ Premiere\ Pro\ 2024.app/'
-alt-w = 'exec-and-forget open -a /Applications/Obsidian.app'
+alt-b = 'exec-and-forget open -a "Google Chrome"'        # Browser (workspace 1)
+alt-c = 'exec-and-forget open -a "Windsurf"'              # Code editor (workspace 2)
+alt-t = 'exec-and-forget open -a "Ghostty"'               # Terminal (workspace 3)
+alt-o = 'exec-and-forget open -a "Microsoft Outlook"'     # Email (workspace 4)
+alt-s = 'exec-and-forget open -a "Slack"'                 # Chat (workspace 6)
+alt-w = 'exec-and-forget open -a "Obsidian"'              # Notes (workspace 9)
+alt-p = 'exec-and-forget open -a "Adobe Premiere Pro 2024"'
 alt-shift-r = ['exec-and-forget /opt/homebrew/bin/sketchybar --reload']
 
 # See: https://nikitabobko.github.ioeAeroSpace/commands#layout
@@ -184,55 +187,132 @@ alt-shift-j = ['join-with down', 'mode main']
 alt-shift-k = ['join-with up', 'mode main']
 alt-shift-l = ['join-with right', 'mode main']
 
-# Default space
+# ---- Auto-assign apps to workspaces ----
+# Layout:
+#   MAIN      (active loop):   1 browser, 2 code, 3 terminal, 4 email/office, 5 free/overflow
+#   SECONDARY (reference):     6 chat, 7 music, 8 meetings, 9 notes + scratch
+# Rules run in order. Tiling rules come first; floating rules last.
+
+# WS 1: Browser
 [[on-window-detected]]
-if.app-id ='com.brave.Browser'
+if.app-id = 'com.google.Chrome'
 run = ['move-node-to-workspace 1']
 
+# WS 2: Code
 [[on-window-detected]]
-if.app-id ='org.chromium.Thorium'
-run = ['move-node-to-workspace 1']
-
-[[on-window-detected]]
-if.app-id ='com.microsoft.Outlook'
+if.app-id = 'com.exafunction.windsurf'
 run = ['move-node-to-workspace 2']
 
 [[on-window-detected]]
-if.app-id ='com.microsoft.teams2'
+if.app-id = 'com.codeium.windsurf'
+run = ['move-node-to-workspace 2']
+
+# WS 3: Terminal
+[[on-window-detected]]
+if.app-id = 'com.mitchellh.ghostty'
 run = ['move-node-to-workspace 3']
 
+# WS 4: Email + Office
 [[on-window-detected]]
-if.app-id ='com.microsoft.Word'
+if.app-id = 'com.microsoft.Outlook'
 run = ['move-node-to-workspace 4']
 
 [[on-window-detected]]
-if.app-id ='com.microsoft.Powerpoint'
+if.app-id = 'com.microsoft.Word'
 run = ['move-node-to-workspace 4']
 
 [[on-window-detected]]
-if.app-id ='com.microsoft.Excel'
+if.app-id = 'com.microsoft.Powerpoint'
 run = ['move-node-to-workspace 4']
 
 [[on-window-detected]]
-if.app-id ='com.mitchellh.ghostty'
-run = ['move-node-to-workspace 5']
+if.app-id = 'com.microsoft.Excel'
+run = ['move-node-to-workspace 4']
 
+# WS 6: Chat (secondary when docked) — Slack + WhatsApp tile together
 [[on-window-detected]]
-if.app-id ='com.apple.MobileSMS'
+if.app-id = 'com.tinyspeck.slackmacgap'
 run = ['move-node-to-workspace 6']
 
 [[on-window-detected]]
-if.app-id ='tv.plex.plexamp'
+if.app-id = 'net.whatsapp.WhatsApp'
+run = ['move-node-to-workspace 6']
+
+# WS 7: Music (secondary when docked)
+[[on-window-detected]]
+if.app-id = 'tv.plex.plexamp'
 run = ['move-node-to-workspace 7']
 
-# force certain workspaces to certain monitors
+[[on-window-detected]]
+if.app-id = 'com.spotify.client'
+run = ['move-node-to-workspace 7']
+
+# WS 8: Meetings (secondary when docked)
+[[on-window-detected]]
+if.app-id = 'us.zoom.xos'
+run = ['move-node-to-workspace 8']
+
+# Google Meet popped-out window (Chrome "picture-in-picture" style).
+# Matches a Chrome window whose title contains "Meet - ".
+[[on-window-detected]]
+if.app-id = 'com.google.Chrome'
+if.window-title-regex-substring = 'Meet - '
+run = ['move-node-to-workspace 8']
+
+# WS 9: Notes + Messages + scratch (secondary when docked)
+[[on-window-detected]]
+if.app-id = 'md.obsidian'
+run = ['move-node-to-workspace 9']
+
+[[on-window-detected]]
+if.app-id = 'com.apple.MobileSMS'
+run = ['move-node-to-workspace 9']
+
+# ---- Always-float apps ----
+# These windows never tile — they sit on top as free-floating rectangles.
+# Great for small utility windows that look weird stretched into a tile.
+
+# System Settings / System Preferences
+[[on-window-detected]]
+if.app-id = 'com.apple.systempreferences'
+run = ['layout floating']
+
+# Calculator
+[[on-window-detected]]
+if.app-id = 'com.apple.calculator'
+run = ['layout floating']
+
+# QuickTime (both the new and legacy bundle ids)
+[[on-window-detected]]
+if.app-id = 'com.apple.QuickTimePlayerX'
+run = ['layout floating']
+
+# Finder "Get Info" / small Finder popups
+[[on-window-detected]]
+if.app-id = 'com.apple.finder'
+if.window-title-regex-substring = 'Info'
+run = ['layout floating']
+
+# 1Password quick-access popup
+[[on-window-detected]]
+if.app-id = 'com.1password.1password'
+if.window-title-regex-substring = 'Quick Access'
+run = ['layout floating']
+
+# Workspace -> monitor force assignment.
+# If a workspace is pinned to 'secondary' and no secondary monitor is attached,
+# AeroSpace gracefully falls it back to 'main'. When you dock, they migrate over.
+#
+# Strategy:
+#   Main (active loop):     1 browser, 2 code, 3 terminal, 4 email/office, 5 free
+#   Secondary (reference):  6 chat, 7 music, 8 meetings, 9 notes + scratch
 [workspace-to-monitor-force-assignment]
-1 = 'main'                  # Monitor sequence number from left to right. 1-based indexing
-2 = 'main'                  # Main monitor
-3 = 'main'                  # Non-main monitor in case when there are only two monitors
-4 = 'main'                  # Non-main monitor in case when there are only two monitors
-5 = 'main'
-6 = 'main'
-7 = 'main'
-8 = 'main'
-9 = 'secondary'
+1 = 'main'         # Chrome
+2 = 'main'         # Windsurf
+3 = 'main'         # Ghostty
+4 = 'main'         # Outlook / Office
+5 = 'main'         # Free / overflow
+6 = 'secondary'    # Slack + WhatsApp
+7 = 'secondary'    # Plexamp / Spotify
+8 = 'secondary'    # Meetings (Zoom, Meet popouts)
+9 = 'secondary'    # Obsidian + Messages + scratch

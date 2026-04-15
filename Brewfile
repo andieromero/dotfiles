@@ -31,3 +31,4 @@ brew "FelixKratz/formulae/borders"     # JankyBorders — active window borders
 cask "ghostty"                 # Terminal
 cask "karabiner-elements"      # Keyboard remapper
 cask "1password-cli"           # 1Password CLI (SSH agent support)
+cask "claude-code"             # Anthropic's CLI coding agent
