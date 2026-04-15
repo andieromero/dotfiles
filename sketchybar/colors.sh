@@ -1,6 +1,24 @@
 #!/bin/bash
 
 export WHITE=0xffffffff
+export RED=0xfffda7a6
+export GREEN=0xffa6da95
+export GREY_TRANSP=0x44000000
+
+# Hot palette — defined up front so items below can reference them
+export HOT_PINK=0xffff1493
+export HOT_PURPLE=0xffbf00ff
+export SOFT_PINK=0xffffb6c1
+export NOTIF_COLOR=0xffff3fa3
+
+# Layout-mode indicator (tiles / accordion / floating)
+export FRONT_APP_LAYOUT_ICON_COLOR=$HOT_PURPLE
+export FRONT_APP_LAYOUT_BG_COLOR=$GREY_TRANSP
+
+# Calendar event pill
+export CAL_EVENT_ICON_COLOR=$HOT_PINK
+export CAL_EVENT_LABEL_COLOR=$WHITE
+export CAL_EVENT_BG_COLOR=$GREY_TRANSP
 
 # -- Teal Scheme --
 # export BAR_COLOR=0xff001f30
@@ -8,9 +26,14 @@ export WHITE=0xffffffff
 # export ACCENT_COLOR=0xff2cf9ed
 
 # -- Gray Scheme --
-export BAR_COLOR=0xff101314
-export ITEM_BG_COLOR=0xff353c3f
-export ACCENT_COLOR=0xffffffff
+# export BAR_COLOR=0xff101314
+# export ITEM_BG_COLOR=0xff353c3f
+# export ACCENT_COLOR=0xffffffff
+
+# -- Hot Pink / Hot Purple Scheme (active) --
+export BAR_COLOR=0xff9400d3               # dark violet bar (easier on the eyes than neon purple)
+export ITEM_BG_COLOR=$SOFT_PINK           # soft pink for inactive pills
+export ACCENT_COLOR=$HOT_PINK             # hot pink — active highlight
 
 # -- Purple Scheme --
 # export BAR_COLOR=0xff140c42
@@ -41,3 +64,7 @@ export ACCENT_COLOR=0xffffffff
 # export BAR_COLOR=0xff2d2b02
 # export ITEM_BG_COLOR=0xff8e7e0a
 # export ACCENT_COLOR=0xfff7fc17
+
+# -- JankyBorders --
+export BORDER_ACTIVE_COLOR=$HOT_PINK
+export BORDER_BACKGROUND_COLOR=$HOT_PURPLE

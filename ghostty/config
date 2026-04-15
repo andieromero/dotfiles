@@ -4,3 +4,8 @@ background-blur-radius = 20
 mouse-hide-while-typing = true
 window-decoration = true
 macos-option-as-alt = true
+
+# Use native macOS tabs so Cmd+T produces a grouped tab instead of a new
+# free-floating window that AeroSpace would tile into a split.
+macos-titlebar-style = native
+window-new-tab-position = end

@@ -1,23 +1,14 @@
 #!/bin/bash
 
-#options=(
-#	style=round
-#	width=4.5
-#	hidpi=off
-#	active_color=0xffe2e2e3
-#	inactive_color=0xff414550
-#)
-
-#borders "${options[@]}"
-
-#!/bin/bash
+source "$HOME/.config/sketchybar/colors.sh"
 
 options=(
   style=round
-  width=6.0
-  hidpi=off
-  active_color=0xffe2e2e3
-  inactive_color=0xff414550
+  width=7.5
+  hidpi=on
+  active_color=$BORDER_ACTIVE_COLOR
+  background_color=$BORDER_BACKGROUND_COLOR
+  blacklist="Leader Key,CleanShot,Tuna"
 )
 
 borders "${options[@]}"

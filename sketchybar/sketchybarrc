@@ -30,8 +30,8 @@ sketchybar --bar position=top height=40 corner_radius=30 color=$BAR_COLOR \
 default=(
   padding_left=5
   padding_right=5
-  icon.font="Hack Nerd Font:Bold:17.0"
-  label.font="SF Pro:Semibold:17.0"
+  icon.font="Hack Nerd Font:Bold:14.0"
+  label.font="SF Pro:Semibold:14.0"
   #icon.color=0xffffffff
   icon.color=$WHITE
   #label.color=0xffffffff
@@ -46,8 +46,11 @@ sketchybar --default "${default[@]}"
 
 ##### Adding aeropsace layouts #####
 
-# Add the aerospace_workspace_change event we specified in aerospace.toml
+# Add the aerospace_workspace_change event we specified in aerospace.toml.
+# aerospace_mode_changed fires when you enter/exit service mode — used for the
+# layout-mode indicator pill on the left.
 sketchybar --add event aerospace_workspace_change
+sketchybar --add event aerospace_mode_changed
 
 # Add workspaces 1-8 only (workspace 9 is secondary scratch, not shown in bar).
 # Pills render on every attached display so the bar is consistent no matter
@@ -61,29 +64,35 @@ for sid in $(aerospace list-workspaces --all); do
     if ! [[ "$sid" =~ ^[0-9]+$ ]]; then continue; fi
     if [ "$sid" -gt 8 ]; then continue; fi
 
+    # Icons match the new layout:
+    #   1 scratch/secondary   2 chat (Slack)       3 free       4 free
+    #   5 terminal            6 code               7 browser    8 overflow/inbox
     case "$sid" in
-      1) ws_icon="" ;;   # globe — browser
-      2) ws_icon="" ;;   # code
-      3) ws_icon="" ;;   # terminal
-      4) ws_icon="" ;;   # envelope — email
-      5) ws_icon="" ;;   # plus — free/overflow
-      6) ws_icon="" ;;   # speech bubble — chat
-      7) ws_icon="" ;;   # music note
-      8) ws_icon="" ;;   # video camera — meetings
-      *) ws_icon="$sid" ;;
+      1) ws_icon="" ;;   # star — scratch
+      2) ws_icon="" ;;   # speech bubble — chat
+      3) ws_icon="" ;;   # plus — free
+      4) ws_icon="" ;;   # plus — free
+      5) ws_icon="" ;;   # terminal
+      6) ws_icon="" ;;   # code
+      7) ws_icon="" ;;   # globe — browser
+      8) ws_icon="" ;;   # inbox — overflow
+      *) ws_icon="" ;;
     esac
+    # Pill shows "<number> <glyph>" so you always know the shortcut
+    pill_icon="$sid $ws_icon"
 
     sketchybar --add item space.$sid left \
       --subscribe space.$sid aerospace_workspace_change \
       --set space.$sid \
+      update_freq=10 \
       drawing=on \
-      background.color=0x44ffffff \
+      background.color=$ITEM_BG_COLOR \
       background.corner_radius=5 \
       background.drawing=on \
-      background.border_color=0xAAFFFFFF \
+      background.border_color=$HOT_PURPLE \
       background.border_width=0 \
       background.height=25 \
-      icon="$ws_icon" \
+      icon="$pill_icon" \
       icon.padding_left=10 \
       icon.shadow.distance=4 \
       icon.shadow.color=0xA0000000 \
@@ -118,8 +127,33 @@ for sid in $(aerospace list-workspaces --all --empty no); do
 done
 
 
-#front app
+# Chevron separator between workspace pills and the front-app block
+sketchybar --add item chevron left \
+  --set chevron icon= label.drawing=off icon.padding_left=10 icon.padding_right=10
+
+# Front app (focused app name) + layout-mode indicator (tiles/accordion/floating)
 source "$ITEM_DIR/front_app.sh"
+
+sketchybar --add item front_app_layout left \
+  --set front_app_layout \
+    update_freq=2 \
+    icon.drawing=on \
+    icon.font="Hack Nerd Font:Regular:14.0" \
+    icon.color=$FRONT_APP_LAYOUT_ICON_COLOR \
+    icon.padding_left=8 \
+    icon.padding_right=8 \
+    label.drawing=on \
+    label.font="SF Pro:Semibold:12.0" \
+    label.color=$WHITE \
+    label.padding_left=0 \
+    label.padding_right=6 \
+    background.drawing=on \
+    background.color=$FRONT_APP_LAYOUT_BG_COLOR \
+    background.corner_radius=6 \
+    background.height=20 \
+    script="$PLUGIN_DIR/front_app.sh" \
+    click_script="$PLUGIN_DIR/layout_toggle.sh" \
+  --subscribe front_app_layout front_app_switched aerospace_mode_changed aerospace_workspace_change
 
 
 ##### Adding Right Items #####
@@ -141,6 +175,16 @@ sketchybar --add item clock right \
   --add item battery right \
   --set battery update_freq=120 script="$PLUGIN_DIR/battery.sh" \
   --subscribe battery system_woke power_source_change \
+  --add item calendar_event right \
+  --set calendar_event \
+    update_freq=60 \
+    script="$PLUGIN_DIR/calendar_event.sh" \
+    click_script="open -a Calendar" \
+    icon.font="Hack Nerd Font:Regular:14.0" \
+    background.drawing=on \
+    background.color=$CAL_EVENT_BG_COLOR \
+    background.corner_radius=8 \
+    background.height=25 \
   --add item swap e \
   icon="" \
   label.font="Hack Nerd Font:Italic:13.0" \

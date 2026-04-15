@@ -28,9 +28,9 @@ accordion-padding = 0
 default-root-container-layout = 'tiles'
 
 # Possible values: horizontal|vertical|auto
-# 'auto' means: wide monitor (anything wider than high) gets horizontal orientation,
-#               tall monitor (anything higher than wide) gets vertical orientation
-default-root-container-orientation = 'auto'
+# 'auto' = wide monitor gets horizontal, tall gets vertical
+# Forced vertical: new windows always stack top-to-bottom regardless of monitor shape.
+default-root-container-orientation = 'vertical'
 
 # Mouse follows focus when focused monitor changes
 # Drop it from your config, if you don't like this behavior
@@ -123,11 +123,29 @@ alt-e = 'layout tiles horizontal vertical'
 alt-comma = 'layout accordion horizontal vertical'
 alt-f = 'fullscreen'
 alt-y = ['focus right', 'join-with down', 'layout tiles horizontal']
+
+# ---- cmd-prefixed layout toggles (consistent with cmd+1..9 workspace flow) ----
+cmd-backslash   = 'layout tiles horizontal vertical'      # tiles H <-> V
+cmd-slash       = 'layout accordion horizontal vertical'  # accordion H <-> V
+cmd-period      = 'layout tiles accordion'                # tiles <-> accordion
+cmd-0           = 'fullscreen'                            # fullscreen toggle
+cmd-quote       = 'layout floating tiling'                # float <-> tile
 # See: https://nikitabobko.github.io/AeroSpace/commands#focus
 alt-h = 'focus left'
 alt-j = 'focus down'
 alt-k = 'focus up'
 alt-l = 'focus right'
+
+# Arrow-key focus — cmd + arrow cycles through windows directionally AND
+# crosses monitor boundaries so you can sweep across every visible window
+# on every attached display. Wraps around when you hit the outer edge.
+#
+# Note: overrides macOS text-nav defaults (cmd+left = start of line, etc.)
+# in text input, use Home/End or option+arrow for word-nav.
+cmd-left  = 'focus --boundaries all-monitors-outer-frame --boundaries-action wrap-around-all-monitors left'
+cmd-down  = 'focus --boundaries all-monitors-outer-frame --boundaries-action wrap-around-all-monitors down'
+cmd-up    = 'focus --boundaries all-monitors-outer-frame --boundaries-action wrap-around-all-monitors up'
+cmd-right = 'focus --boundaries all-monitors-outer-frame --boundaries-action wrap-around-all-monitors right'
 
 # app shortcut
 
@@ -141,27 +159,30 @@ alt-shift-l = 'move right'
 alt-shift-minus = 'resize smart -50'
 alt-shift-equal = 'resize smart +50'
 
-# See: https://nikitabobko.github.io/AeroSpace/commands#workspace
-alt-1 = 'workspace 1'
-alt-2 = 'workspace 2'
-alt-3 = 'workspace 3'
-alt-4 = 'workspace 4'
-alt-5 = 'workspace 5'
-alt-6 = 'workspace 6'
-alt-7 = 'workspace 7'
-alt-8 = 'workspace 8'
-alt-9 = 'workspace 9'
+# Switch to workspace — cmd-1..9 (overrides macOS/app defaults for these combos)
+cmd-1 = 'workspace 1'
+cmd-2 = 'workspace 2'
+cmd-3 = 'workspace 3'
+cmd-4 = 'workspace 4'
+cmd-5 = 'workspace 5'
+cmd-6 = 'workspace 6'
+cmd-7 = 'workspace 7'
+cmd-8 = 'workspace 8'
+cmd-9 = 'workspace 9'
 
-# See: https://nikitabobko.github.io/AeroSpace/commands#move-node-to-workspace
-alt-shift-1 = 'move-node-to-workspace 1'
-alt-shift-2 = 'move-node-to-workspace 2'
-alt-shift-3 = 'move-node-to-workspace 3'
-alt-shift-4 = 'move-node-to-workspace 4'
-alt-shift-5 = 'move-node-to-workspace 5'
-alt-shift-6 = 'move-node-to-workspace 6'
-alt-shift-7 = 'move-node-to-workspace 7'
-alt-shift-8 = 'move-node-to-workspace 8'
-alt-shift-9 = 'move-node-to-workspace 9'
+# Move focused window to workspace — hyper+1..9
+# (hyper = cmd+alt+ctrl+shift, produced by pressing caps lock via Karabiner).
+# caps+N sends the focused window to workspace N in one keystroke.
+# cmd+tab stays native for the macOS app switcher.
+cmd-alt-ctrl-shift-1 = 'move-node-to-workspace 1'
+cmd-alt-ctrl-shift-2 = 'move-node-to-workspace 2'
+cmd-alt-ctrl-shift-3 = 'move-node-to-workspace 3'
+cmd-alt-ctrl-shift-4 = 'move-node-to-workspace 4'
+cmd-alt-ctrl-shift-5 = 'move-node-to-workspace 5'
+cmd-alt-ctrl-shift-6 = 'move-node-to-workspace 6'
+cmd-alt-ctrl-shift-7 = 'move-node-to-workspace 7'
+cmd-alt-ctrl-shift-8 = 'move-node-to-workspace 8'
+cmd-alt-ctrl-shift-9 = 'move-node-to-workspace 9'
 
 # See: https://nikitabobko.github.io/AeroSpace/commands#workspace-back-and-forth
 alt-tab = 'workspace-back-and-forth'
@@ -187,136 +208,99 @@ alt-shift-j = ['join-with down', 'mode main']
 alt-shift-k = ['join-with up', 'mode main']
 alt-shift-l = ['join-with right', 'mode main']
 
+
 # ---- Auto-assign apps to workspaces ----
+# Pinned anchors only — everything else is unpinned and falls through to the
+# catch-all at the bottom, which lands it on workspace 8 (overflow/inbox).
+#
 # Layout:
-#   MAIN      (active loop):   1 browser, 2 code, 3 terminal, 4 email/office, 5 free/overflow
-#   SECONDARY (reference):     6 chat, 7 music, 8 meetings, 9 notes + scratch
-# Rules run in order. Tiling rules come first; floating rules last.
+#   SECONDARY when docked:   1 free/scratch, 2 chat (Slack), 3 free, 4 free
+#   MAIN (always laptop):    5 Ghostty, 6 Windsurf, 7 Chrome, 8 overflow
+#
+# Each pinned rule ends with `check-further-callbacks = false` so it doesn't
+# cascade into the catch-all.
 
-# WS 1: Browser
+# WS 5: Terminal (Ghostty floats so its tabs/splits behave natively)
 [[on-window-detected]]
-if.app-id = 'com.google.Chrome'
-run = ['move-node-to-workspace 1']
+if.app-id = 'com.mitchellh.ghostty'
+check-further-callbacks = true
+run = ['move-node-to-workspace 5', 'layout floating']
 
-# WS 2: Code
+# WS 6: Code
 [[on-window-detected]]
 if.app-id = 'com.exafunction.windsurf'
-run = ['move-node-to-workspace 2']
+check-further-callbacks = false
+run = ['move-node-to-workspace 6']
 
 [[on-window-detected]]
 if.app-id = 'com.codeium.windsurf'
-run = ['move-node-to-workspace 2']
-
-# WS 3: Terminal
-[[on-window-detected]]
-if.app-id = 'com.mitchellh.ghostty'
-run = ['move-node-to-workspace 3']
-
-# WS 4: Email + Office
-[[on-window-detected]]
-if.app-id = 'com.microsoft.Outlook'
-run = ['move-node-to-workspace 4']
-
-[[on-window-detected]]
-if.app-id = 'com.microsoft.Word'
-run = ['move-node-to-workspace 4']
-
-[[on-window-detected]]
-if.app-id = 'com.microsoft.Powerpoint'
-run = ['move-node-to-workspace 4']
-
-[[on-window-detected]]
-if.app-id = 'com.microsoft.Excel'
-run = ['move-node-to-workspace 4']
-
-# WS 6: Chat (secondary when docked) — Slack + WhatsApp tile together
-[[on-window-detected]]
-if.app-id = 'com.tinyspeck.slackmacgap'
+check-further-callbacks = false
 run = ['move-node-to-workspace 6']
 
-[[on-window-detected]]
-if.app-id = 'net.whatsapp.WhatsApp'
-run = ['move-node-to-workspace 6']
-
-# WS 7: Music (secondary when docked)
-[[on-window-detected]]
-if.app-id = 'tv.plex.plexamp'
-run = ['move-node-to-workspace 7']
-
-[[on-window-detected]]
-if.app-id = 'com.spotify.client'
-run = ['move-node-to-workspace 7']
-
-# WS 8: Meetings (secondary when docked)
-[[on-window-detected]]
-if.app-id = 'us.zoom.xos'
-run = ['move-node-to-workspace 8']
-
-# Google Meet popped-out window (Chrome "picture-in-picture" style).
-# Matches a Chrome window whose title contains "Meet - ".
+# WS 7: Browser
 [[on-window-detected]]
 if.app-id = 'com.google.Chrome'
-if.window-title-regex-substring = 'Meet - '
-run = ['move-node-to-workspace 8']
+check-further-callbacks = false
+run = ['move-node-to-workspace 7']
 
-# WS 9: Notes + Messages + scratch (secondary when docked)
+# WS 2: Chat (Slack pinned; WhatsApp is unpinned and goes to overflow)
 [[on-window-detected]]
-if.app-id = 'md.obsidian'
-run = ['move-node-to-workspace 9']
+if.app-id = 'com.tinyspeck.slackmacgap'
+check-further-callbacks = false
+run = ['move-node-to-workspace 2']
 
-[[on-window-detected]]
-if.app-id = 'com.apple.MobileSMS'
-run = ['move-node-to-workspace 9']
-
-# ---- Always-float apps ----
-# These windows never tile — they sit on top as free-floating rectangles.
-# Great for small utility windows that look weird stretched into a tile.
-
-# System Settings / System Preferences
+# ---- Always-float apps (never tile, stay on current workspace) ----
 [[on-window-detected]]
 if.app-id = 'com.apple.systempreferences'
+check-further-callbacks = false
 run = ['layout floating']
 
-# Calculator
 [[on-window-detected]]
 if.app-id = 'com.apple.calculator'
+check-further-callbacks = false
 run = ['layout floating']
 
-# QuickTime (both the new and legacy bundle ids)
 [[on-window-detected]]
 if.app-id = 'com.apple.QuickTimePlayerX'
+check-further-callbacks = false
 run = ['layout floating']
 
-# Finder "Get Info" / small Finder popups
 [[on-window-detected]]
 if.app-id = 'com.apple.finder'
 if.window-title-regex-substring = 'Info'
+check-further-callbacks = false
 run = ['layout floating']
 
-# 1Password quick-access popup
 [[on-window-detected]]
 if.app-id = 'com.1password.1password'
 if.window-title-regex-substring = 'Quick Access'
+check-further-callbacks = false
 run = ['layout floating']
+
+# ---- Catch-all: unpinned apps land on workspace 8 (overflow/inbox) ----
+# This is the last rule. Any window not already matched above falls through
+# here and gets routed to 8. From 8 you can send it wherever with alt-shift-N.
+[[on-window-detected]]
+run = ['move-node-to-workspace 8']
 
 # Workspace -> monitor force assignment.
 #
-# Uses 'built-in' (the laptop's internal display) instead of 'main' so the
-# active loop stays on the laptop no matter which monitor macOS considers
-# "main" (= wherever the menu bar lives). External monitor catches the
-# reference workspaces when docked; when undocked, everything collapses to
-# built-in gracefully.
+# Pinned by monitor NAME (not by 'main'/'secondary') so the layout is
+# independent of macOS's main-display setting.
 #
-# Strategy:
-#   Laptop (active loop):      1 browser, 2 code, 3 terminal, 4 email/office, 5 free
-#   External when docked:      6 chat, 7 music, 8 meetings, 9 notes + scratch
+#   HP E27 G5  -> active loop (5-8): Ghostty, Windsurf, Chrome, overflow
+#   USB C2     -> reference (1-4):   scratch, Slack, free, free
+#
+# Each pin ends with 'main' as a fallback. When only one display is attached
+# (laptop on the go, or only one external connected), every workspace collapses
+# to that single display automatically.
 [workspace-to-monitor-force-assignment]
-1 = 'built-in'                   # Chrome
-2 = 'built-in'                   # Windsurf
-3 = 'built-in'                   # Ghostty
-4 = 'built-in'                   # Outlook / Office
-5 = 'built-in'                   # Free / overflow
-6 = ['secondary', 'built-in']    # Slack + WhatsApp
-7 = ['secondary', 'built-in']    # Plexamp / Spotify
-8 = ['secondary', 'built-in']    # Meetings (Zoom, Meet popouts)
-9 = ['secondary', 'built-in']    # Obsidian + Messages + scratch
+1 = ['USB C2', 'main']           # Free / scratch
+2 = ['USB C2', 'main']           # Slack
+3 = ['USB C2', 'main']           # Free
+4 = ['USB C2', 'main']           # Free
+5 = ['HP E27 G5', 'main']        # Ghostty
+6 = ['HP E27 G5', 'main']        # Windsurf
+7 = ['HP E27 G5', 'main']        # Chrome
+8 = ['HP E27 G5', 'main']        # Overflow / inbox (unpinned apps)
+9 = ['USB C2', 'main']           # Hidden scratch (Obsidian / Messages)

@@ -117,3 +117,26 @@ flowen-os() {
   cd ~/Flowen/flowen-os || return
   set_term_title "flowen-os"
 }
+
+# Short aliases
+alias twin='twin-andie'
+alias flowen='flowen-os'
+alias wind='windsurf'     # Open files/directories in Windsurf: `wind .` or `wind path/to/file`
+
+# Use Windsurf as the default editor for commands like `git commit`, `crontab -e`, etc.
+export EDITOR="windsurf --wait"
+export VISUAL="windsurf --wait"
+
+# Named directory hashes — let you reference paths as ~name anywhere.
+#   cd ~twin         # jumps to the twin-andie repo
+#   ls ~flowen/src   # tab-completes into the repo
+#   vim ~flowen      # works with any command
+hash -d twin=~/Flowen/twin-andie
+hash -d flowen=~/Flowen/flowen-os
+hash -d dots=~/.config
+
+# Quick-edit shortcuts for this dotfiles repo
+alias zshconfig='$EDITOR ~/.config/zshrc'
+alias aeroconfig='$EDITOR ~/.config/aerospace/aerospace.toml'
+alias barconfig='$EDITOR ~/.config/sketchybar/sketchybarrc'
+alias ghosttyconfig='$EDITOR ~/.config/ghostty/config'
