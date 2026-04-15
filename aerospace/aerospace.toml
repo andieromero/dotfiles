@@ -300,19 +300,23 @@ if.window-title-regex-substring = 'Quick Access'
 run = ['layout floating']
 
 # Workspace -> monitor force assignment.
-# If a workspace is pinned to 'secondary' and no secondary monitor is attached,
-# AeroSpace gracefully falls it back to 'main'. When you dock, they migrate over.
+#
+# Uses 'built-in' (the laptop's internal display) instead of 'main' so the
+# active loop stays on the laptop no matter which monitor macOS considers
+# "main" (= wherever the menu bar lives). External monitor catches the
+# reference workspaces when docked; when undocked, everything collapses to
+# built-in gracefully.
 #
 # Strategy:
-#   Main (active loop):     1 browser, 2 code, 3 terminal, 4 email/office, 5 free
-#   Secondary (reference):  6 chat, 7 music, 8 meetings, 9 notes + scratch
+#   Laptop (active loop):      1 browser, 2 code, 3 terminal, 4 email/office, 5 free
+#   External when docked:      6 chat, 7 music, 8 meetings, 9 notes + scratch
 [workspace-to-monitor-force-assignment]
-1 = 'main'         # Chrome
-2 = 'main'         # Windsurf
-3 = 'main'         # Ghostty
-4 = 'main'         # Outlook / Office
-5 = 'main'         # Free / overflow
-6 = 'secondary'    # Slack + WhatsApp
-7 = 'secondary'    # Plexamp / Spotify
-8 = 'secondary'    # Meetings (Zoom, Meet popouts)
-9 = 'secondary'    # Obsidian + Messages + scratch
+1 = 'built-in'                   # Chrome
+2 = 'built-in'                   # Windsurf
+3 = 'built-in'                   # Ghostty
+4 = 'built-in'                   # Outlook / Office
+5 = 'built-in'                   # Free / overflow
+6 = ['secondary', 'built-in']    # Slack + WhatsApp
+7 = ['secondary', 'built-in']    # Plexamp / Spotify
+8 = ['secondary', 'built-in']    # Meetings (Zoom, Meet popouts)
+9 = ['secondary', 'built-in']    # Obsidian + Messages + scratch

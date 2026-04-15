@@ -93,3 +93,27 @@ alias y="yazi"
 
 # 1Password SSH Keys
 export SSH_AUTH_SOCK="$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+
+# ---- Project session helpers ----
+# Each function cd's into a repo and sets the Ghostty tab/pane title.
+# Usage: run the function name in any Ghostty tab or split.
+
+# Set a terminal title that sticks across prompts (overrides auto-title from
+# shell integration). Call once; re-run if your title gets clobbered.
+set_term_title() {
+  local title="$1"
+  # OSC 0 sets both window and tab/icon title
+  printf '\e]0;%s\a' "$title"
+  # Stop Ghostty's shell integration from updating the title back to $PWD
+  export DISABLE_AUTO_TITLE="true"
+}
+
+twin-andie() {
+  cd ~/Flowen/twin-andie || return
+  set_term_title "Andie's TWIN"
+}
+
+flowen-os() {
+  cd ~/Flowen/flowen-os || return
+  set_term_title "flowen-os"
+}

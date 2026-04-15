@@ -49,18 +49,31 @@ sketchybar --default "${default[@]}"
 # Add the aerospace_workspace_change event we specified in aerospace.toml
 sketchybar --add event aerospace_workspace_change
 
-# Add workspaces for all monitors (single pass, all workspaces across monitors)
+# Add workspaces 1-8 only (workspace 9 is secondary scratch, not shown in bar).
+# Pills render on every attached display so the bar is consistent no matter
+# which monitor you're looking at.
+#
+# Icons come from Hack Nerd Font (already set as default icon.font). The
+# mapping reflects the workspace layout:
+#   1 browser   2 code     3 terminal  4 email
+#   5 free      6 chat     7 music     8 meetings
 for sid in $(aerospace list-workspaces --all); do
-    # Determine which display this workspace should be shown on.
-    # Only numeric workspace ids 8-10 go to display 2; everything else (including
-    # non-numeric names like "a1") goes to display 1.
-    display_id="1"
-    if [[ "$sid" =~ ^[0-9]+$ ]] && [ "$sid" -ge 8 ] && [ "$sid" -le 10 ]; then
-      display_id="2"
-    fi
-    
+    if ! [[ "$sid" =~ ^[0-9]+$ ]]; then continue; fi
+    if [ "$sid" -gt 8 ]; then continue; fi
+
+    case "$sid" in
+      1) ws_icon="" ;;   # globe — browser
+      2) ws_icon="" ;;   # code
+      3) ws_icon="" ;;   # terminal
+      4) ws_icon="" ;;   # envelope — email
+      5) ws_icon="" ;;   # plus — free/overflow
+      6) ws_icon="" ;;   # speech bubble — chat
+      7) ws_icon="" ;;   # music note
+      8) ws_icon="" ;;   # video camera — meetings
+      *) ws_icon="$sid" ;;
+    esac
+
     sketchybar --add item space.$sid left \
-      --set space.$sid display="$display_id" \
       --subscribe space.$sid aerospace_workspace_change \
       --set space.$sid \
       drawing=on \
@@ -70,7 +83,7 @@ for sid in $(aerospace list-workspaces --all); do
       background.border_color=0xAAFFFFFF \
       background.border_width=0 \
       background.height=25 \
-      icon="$sid" \
+      icon="$ws_icon" \
       icon.padding_left=10 \
       icon.shadow.distance=4 \
       icon.shadow.color=0xA0000000 \
@@ -85,8 +98,10 @@ for sid in $(aerospace list-workspaces --all); do
       script="$CONFIG_DIR/plugins/aerospace.sh $sid"
 done
 
-# Load Icons on startup for all non-empty workspaces
+# Load Icons on startup for non-empty workspaces 1-8 (9 is scratch, not shown)
 for sid in $(aerospace list-workspaces --all --empty no); do
+  if ! [[ "$sid" =~ ^[0-9]+$ ]]; then continue; fi
+  if [ "$sid" -gt 8 ]; then continue; fi
   apps=$(aerospace list-windows --workspace "$sid" | awk -F'|' '{gsub(/^ *| *$/, "", $2); print $2}')
 
   sketchybar --set space.$sid drawing=on
