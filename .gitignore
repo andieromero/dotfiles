@@ -1,8 +1,37 @@
-# Cache and compiled junk
+# ---- macOS junk ----
+**/.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# ---- Editor / IDE ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.netrwhist
+
+# ---- Cache and compiled junk ----
 **/.cache/
 **/__pycache__/
+*.pyc
+node_modules/
 
-# Secrets or tokens (if you leave them in here for some reason)
+# ---- Secrets or tokens ----
 **/secrets.*
 **/*.env
 **/*token*
@@ -10,4 +39,8 @@ op/config
 raycast/extensions/
 gitleaks-report.json
 .bfg-replacements.txt
-.DS_Store
+
+# ---- Other developers' configs (kept as reference, not tracked) ----
+dev sketchybar/
+zsh/
+dotfiles/
