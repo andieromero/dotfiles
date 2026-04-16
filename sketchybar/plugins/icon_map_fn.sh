@@ -688,6 +688,9 @@ function icon_map() {
   "Ghostty")
     icon_result=":ghostty:"
     ;;
+  "Wispr Flow" | "Flow" | "Wispr")
+    icon_result=":wispr_flow:"
+    ;;
   "Xcode")
     icon_result=":xcode:"
     ;;

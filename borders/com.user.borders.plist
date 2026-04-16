@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  User LaunchAgent for JankyBorders.
+
+  Why a custom LaunchAgent instead of `brew services start borders`:
+    1. The brew-generated plist invokes `borders` with no args, ignoring
+       ~/.config/borders/bordersrc (so active color, width, blacklist have
+       no effect).
+    2. It starts borders too early in the login sequence — before macOS TCC
+       (Screen Recording / Accessibility) is fully initialized — so borders
+       launches but can't see which window is focused and draws nothing
+       until you manually toggle the permission.
+
+  Install:
+    cp ~/.config/borders/com.user.borders.plist ~/Library/LaunchAgents/
+    launchctl load -w ~/Library/LaunchAgents/com.user.borders.plist
+
+  Reload after editing bordersrc:
+    launchctl kickstart -k gui/$(id -u)/com.user.borders
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.user.borders</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-lc</string>
+        <!-- 5s pre-exec sleep gives TCC time to finish initializing at login. -->
+        <string>sleep 5 &amp;&amp; exec "$HOME/.config/borders/bordersrc"</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <!-- Prevent rapid-restart loops if borders crashes on launch -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>StandardOutPath</key>
+    <string>/tmp/borders.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/borders.err.log</string>
+</dict>
+</plist>

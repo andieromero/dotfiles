@@ -4,7 +4,7 @@ source "$HOME/.config/sketchybar/colors.sh"
 
 options=(
   style=round
-  width=7.5
+  width=9.5
   hidpi=on
   active_color=$BORDER_ACTIVE_COLOR
   background_color=$BORDER_BACKGROUND_COLOR

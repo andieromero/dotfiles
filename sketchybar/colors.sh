@@ -11,6 +11,9 @@ export HOT_PURPLE=0xffbf00ff
 export SOFT_PINK=0xffffb6c1
 export NOTIF_COLOR=0xffff3fa3
 
+# Flowen/TWIN OS pill background — dusty rose, distinct from workspace soft pink
+export FLOWEN_PILL_BG=0xffd97fa8
+
 # Layout-mode indicator (tiles / accordion / floating)
 export FRONT_APP_LAYOUT_ICON_COLOR=$HOT_PURPLE
 export FRONT_APP_LAYOUT_BG_COLOR=$GREY_TRANSP
@@ -18,7 +21,7 @@ export FRONT_APP_LAYOUT_BG_COLOR=$GREY_TRANSP
 # Calendar event pill
 export CAL_EVENT_ICON_COLOR=$HOT_PINK
 export CAL_EVENT_LABEL_COLOR=$WHITE
-export CAL_EVENT_BG_COLOR=$GREY_TRANSP
+export CAL_EVENT_BG_COLOR=$SOFT_PINK
 
 # -- Teal Scheme --
 # export BAR_COLOR=0xff001f30

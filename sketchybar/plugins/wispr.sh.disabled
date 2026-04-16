@@ -1,0 +1,43 @@
+#!/bin/sh
+
+# Wispr Flow transcription indicator — always pinned in center.
+# States:
+#   - Wispr not running → grey "Wispr off"
+#   - Wispr running, mic idle → dim "Wispr idle"
+#   - Wispr running, mic active → pink "transcribing → <FrontApp>"
+# Detection: process presence + IOAudioEngineState input stream active.
+
+if pgrep -x "Wispr Flow" >/dev/null 2>&1 || pgrep -xi "wispr" >/dev/null 2>&1; then
+  WISPR_RUNNING=1
+else
+  WISPR_RUNNING=0
+fi
+
+if [ "$WISPR_RUNNING" = "0" ]; then
+  sketchybar --set "$NAME" \
+    drawing=on \
+    icon="󰍮" \
+    icon.color=0xff666666 \
+    label="Wispr off" \
+    label.color=0xff888888
+  exit 0
+fi
+
+MIC_ACTIVE=$(ioreg -r -c IOAudioEngine 2>/dev/null | grep -c '"IOAudioEngineState" = 1')
+
+if [ "$MIC_ACTIVE" -gt 0 ]; then
+  FRONT_APP=$(osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true' 2>/dev/null)
+  sketchybar --set "$NAME" \
+    drawing=on \
+    icon="󰍬" \
+    icon.color=0xffff5f87 \
+    label="transcribing → ${FRONT_APP:-?}" \
+    label.color=0xffffffff
+else
+  sketchybar --set "$NAME" \
+    drawing=on \
+    icon="󰍮" \
+    icon.color=0xffaaaaaa \
+    label="Wispr idle" \
+    label.color=0xffaaaaaa
+fi

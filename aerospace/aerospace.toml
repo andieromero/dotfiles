@@ -71,9 +71,9 @@ inner.horizontal = 8
 inner.vertical = 8
 outer.bottom = 5
 outer.top = [
-  { monitor."built-in" = 10 },
-  { monitor."main" = 50 },
-  50
+  { monitor."built-in" = 80 },
+  { monitor."main" = 80 },
+  80
 ]
 outer.left = 5
 outer.right = 5

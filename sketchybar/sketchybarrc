@@ -15,12 +15,15 @@ source "$CONFIG_DIR/colors.sh" # Loads all defined colors
 # https://felixkratz.github.io/SketchyBar/config/tricks#color-picker
 
 sketchybar --bar position=top height=40 corner_radius=30 color=$BAR_COLOR \
-                 y_offset=5 \
+                 y_offset=30 \
                  margin=8 \
                  topmost=window \
                  sticky=on \
                  display=all \
                  padding_left=10 padding_right=10
+# y_offset=30 clears the MacBook camera/notch area when running on the built-in
+# display only. Costs ~25px on external displays but that's the tradeoff for
+# notch-safety. Aerospace gaps below need to match (see aerospace.toml outer.top).
 
 ##### Changing Defaults #####
 # We now change some default values, which are applied to all further items.
@@ -28,8 +31,8 @@ sketchybar --bar position=top height=40 corner_radius=30 color=$BAR_COLOR \
 # https://felixkratz.github.io/SketchyBar/config/items
 
 default=(
-  padding_left=5
-  padding_right=5
+  padding_left=2
+  padding_right=2
   icon.font="Hack Nerd Font:Bold:14.0"
   label.font="SF Pro:Semibold:14.0"
   #icon.color=0xffffffff
@@ -52,6 +55,8 @@ sketchybar --default "${default[@]}"
 sketchybar --add event aerospace_workspace_change
 sketchybar --add event aerospace_mode_changed
 
+# Refresh button moved to the far right of the bar — see end of the right chain below.
+
 # Add workspaces 1-8 only (workspace 9 is secondary scratch, not shown in bar).
 # Pills render on every attached display so the bar is consistent no matter
 # which monitor you're looking at.
@@ -68,63 +73,56 @@ for sid in $(aerospace list-workspaces --all); do
     #   1 scratch/secondary   2 chat (Slack)       3 free       4 free
     #   5 terminal            6 code               7 browser    8 overflow/inbox
     case "$sid" in
-      1) ws_icon="" ;;   # star — scratch
-      2) ws_icon="" ;;   # speech bubble — chat
-      3) ws_icon="" ;;   # plus — free
-      4) ws_icon="" ;;   # plus — free
-      5) ws_icon="" ;;   # terminal
-      6) ws_icon="" ;;   # code
-      7) ws_icon="" ;;   # globe — browser
-      8) ws_icon="" ;;   # inbox — overflow
-      *) ws_icon="" ;;
+      1) ws_icon=""; ws_color=0xfffdd835 ;;   # star — scratch (yellow)
+      2) ws_icon=""; ws_color=0xff4fc3f7 ;;   # speech bubble — chat (sky blue)
+      3) ws_icon=""; ws_color=0xff81c784 ;;   # plus — free (green)
+      4) ws_icon=""; ws_color=0xff81c784 ;;   # plus — free (green)
+      5) ws_icon=""; ws_color=0xffba68c8 ;;   # terminal (violet)
+      6) ws_icon=""; ws_color=0xffff8a65 ;;   # code (coral)
+      7) ws_icon=""; ws_color=0xff4db6ac ;;   # globe — browser (teal)
+      8) ws_icon=""; ws_color=0xffffb74d ;;   # inbox — overflow (amber)
+      *) ws_icon=""; ws_color=0xffffffff ;;
     esac
-    # Pill shows "<number> <glyph>" so you always know the shortcut
+    # Pill shows "<number> <glyph>" so you always know the shortcut.
+    # Number stays white, glyph gets the per-workspace color via a color-glyph prefix.
     pill_icon="$sid $ws_icon"
 
+    # Single-item workspace pill — number + glyph + app icons in one label.
+    # Icon = "<n> <themed-glyph>" (e.g. "5 ").
+    # Label = sketchybar-app-font glyphs for apps in that workspace.
+    # Bg colored hot pink only when this is the keyboard-focused workspace.
+    pill_icon="$sid $ws_icon"
     sketchybar --add item space.$sid left \
       --subscribe space.$sid aerospace_workspace_change \
       --set space.$sid \
-      update_freq=10 \
+      update_freq=2 \
       drawing=on \
+      padding_left=2 \
+      padding_right=2 \
       background.color=$ITEM_BG_COLOR \
       background.corner_radius=5 \
       background.drawing=on \
       background.border_color=$HOT_PURPLE \
       background.border_width=0 \
-      background.height=25 \
+      background.height=22 \
       icon="$pill_icon" \
-      icon.padding_left=10 \
-      icon.shadow.distance=4 \
-      icon.shadow.color=0xA0000000 \
-      label.font="sketchybar-app-font:Regular:16.0" \
-      label.padding_right=20 \
+      icon.color=$WHITE \
+      icon.padding_left=8 \
+      icon.padding_right=4 \
+      label.font="sketchybar-app-font:Regular:12.0" \
       label.padding_left=0 \
+      label.padding_right=8 \
       label.y_offset=-1 \
-      label.shadow.drawing=off \
-      label.shadow.color=0xA0000000 \
-      label.shadow.distance=4 \
+      label.color=$WHITE \
       click_script="aerospace workspace $sid" \
       script="$CONFIG_DIR/plugins/aerospace.sh $sid"
 done
 
-# Load Icons on startup for non-empty workspaces 1-8 (9 is scratch, not shown)
-for sid in $(aerospace list-workspaces --all --empty no); do
-  if ! [[ "$sid" =~ ^[0-9]+$ ]]; then continue; fi
-  if [ "$sid" -gt 8 ]; then continue; fi
-  apps=$(aerospace list-windows --workspace "$sid" | awk -F'|' '{gsub(/^ *| *$/, "", $2); print $2}')
-
-  sketchybar --set space.$sid drawing=on
-
-  icon_strip=" "
-  if [ "${apps}" != "" ]; then
-    while read -r app; do
-      icon_strip+=" $($CONFIG_DIR/plugins/icon_map_fn.sh "$app")"
-    done <<<"${apps}"
-  else
-    icon_strip=""
-  fi
-  sketchybar --set space.$sid label="$icon_strip"
+# Initial populate
+for sid in 1 2 3 4 5 6 7 8; do
+  "$CONFIG_DIR/plugins/aerospace.sh" "$sid" >/dev/null 2>&1 &
 done
+wait
 
 
 # Chevron separator between workspace pills and the front-app block
@@ -137,20 +135,21 @@ source "$ITEM_DIR/front_app.sh"
 sketchybar --add item front_app_layout right \
   --set front_app_layout \
     update_freq=2 \
+    padding_left=0 \
     icon.drawing=on \
     icon.font="Hack Nerd Font:Regular:14.0" \
     icon.color=$FRONT_APP_LAYOUT_ICON_COLOR \
-    icon.padding_left=8 \
-    icon.padding_right=8 \
+    icon.padding_left=2 \
+    icon.padding_right=4 \
     label.drawing=on \
-    label.font="SF Pro:Semibold:12.0" \
+    label.font="SF Pro:Semibold:9.0" \
     label.color=$WHITE \
     label.padding_left=0 \
-    label.padding_right=6 \
+    label.padding_right=4 \
     background.drawing=on \
     background.color=$FRONT_APP_LAYOUT_BG_COLOR \
-    background.corner_radius=6 \
-    background.height=20 \
+    background.corner_radius=4 \
+    background.height=18 \
     script="$PLUGIN_DIR/front_app.sh" \
     click_script="$PLUGIN_DIR/layout_toggle.sh" \
   --subscribe front_app_layout front_app_switched aerospace_mode_changed aerospace_workspace_change
@@ -167,24 +166,177 @@ sketchybar --add item front_app_layout right \
 # volume is registered. More info about the event system can be found here:
 # https://felixkratz.github.io/SketchyBar/config/events
 
-sketchybar --add item clock right \
+sketchybar --add item refresh right \
+  --set refresh \
+    icon="󰜉" \
+    icon.color=$WHITE \
+    icon.font="Hack Nerd Font:Bold:14.0" \
+    label.drawing=off \
+    background.drawing=off \
+    padding_left=4 \
+    padding_right=4 \
+    click_script="$PLUGIN_DIR/refresh.sh" \
+  --add item clock right \
   --set clock update_freq=10 script="$PLUGIN_DIR/clock.sh" \
+    padding_left=0 padding_right=0 \
+    label.padding_left=0 label.padding_right=2 \
   --add item volume right \
   --set volume script="$PLUGIN_DIR/volume.sh" \
+    padding_left=0 padding_right=0 \
+    icon.padding_left=2 icon.padding_right=2 \
+    click_script="open /System/Library/PreferencePanes/Sound.prefPane" \
   --subscribe volume volume_change \
   --add item battery right \
   --set battery update_freq=120 script="$PLUGIN_DIR/battery.sh" \
+    icon.padding_left=4 icon.padding_right=2 \
+    label.padding_left=0 label.padding_right=2 \
   --subscribe battery system_woke power_source_change \
+  --add item bluetooth right \
+  --set bluetooth update_freq=30 script="$PLUGIN_DIR/bluetooth.sh" \
+    click_script="open /System/Library/PreferencePanes/Bluetooth.prefPane" \
+  --subscribe bluetooth system_woke \
+  --add item ccusage right \
+  --set ccusage \
+    update_freq=20 \
+    script="$PLUGIN_DIR/ccusage.sh" \
+    icon.font="Hack Nerd Font:Bold:14.0" \
+    label.font="SF Pro:Semibold:12.0" \
+    label.color=$WHITE \
+    background.drawing=on \
+    background.color=$ITEM_BG_COLOR \
+    background.corner_radius=6 \
+    background.height=22 \
+    popup.background.color=$ITEM_BG_COLOR \
+    popup.background.corner_radius=6 \
+    popup.background.border_color=$HOT_PURPLE \
+    popup.background.border_width=1 \
+    popup.horizontal=on \
+    popup.align=right \
+    popup.y_offset=4 \
+    click_script="open -a Claude" \
+  --subscribe ccusage mouse.entered mouse.exited mouse.exited.global \
+  --add item ccusage.tt popup.ccusage \
+  --set ccusage.tt label.font="SF Mono:Regular:11.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
+  --add item claude_session right \
+  --set claude_session \
+    update_freq=5 \
+    script="$PLUGIN_DIR/claude_session.sh" \
+    icon.font="Hack Nerd Font:Bold:14.0" \
+    label.font="SF Pro:Semibold:12.0" \
+    label.color=$WHITE \
+    background.drawing=on \
+    background.color=$ITEM_BG_COLOR \
+    background.corner_radius=6 \
+    background.height=22 \
+    popup.background.color=$ITEM_BG_COLOR \
+    popup.background.corner_radius=6 \
+    popup.background.border_color=$HOT_PURPLE \
+    popup.background.border_width=1 \
+    popup.horizontal=on \
+    popup.align=right \
+    popup.y_offset=4 \
+    click_script="open -a Claude" \
+  --subscribe claude_session mouse.entered mouse.exited mouse.exited.global \
+  --add item claude_session.tt popup.claude_session \
+  --set claude_session.tt label.font="SF Mono:Regular:11.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
+  --add item brain_freshness right \
+  --set brain_freshness \
+    update_freq=60 \
+    script="$PLUGIN_DIR/brain_freshness.sh" \
+    icon.font="Hack Nerd Font:Bold:14.0" \
+    label.font="SF Pro:Semibold:12.0" \
+    label.color=$WHITE \
+    background.drawing=on \
+    background.color=$ITEM_BG_COLOR \
+    background.corner_radius=6 \
+    background.height=22 \
+    popup.background.color=$ITEM_BG_COLOR \
+    popup.background.corner_radius=6 \
+    popup.background.border_color=$HOT_PURPLE \
+    popup.background.border_width=1 \
+    popup.horizontal=on \
+    popup.align=right \
+    popup.y_offset=4 \
+    click_script="open -a Claude" \
+  --subscribe brain_freshness mouse.entered mouse.exited mouse.exited.global \
+  --add item brain_freshness.tt popup.brain_freshness \
+  --set brain_freshness.tt label.font="SF Mono:Regular:11.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
+  --add item twin_tasks right \
+  --set twin_tasks \
+    update_freq=30 \
+    script="$PLUGIN_DIR/twin_tasks.sh" \
+    icon.font="Hack Nerd Font:Bold:14.0" \
+    label.font="SF Pro:Semibold:12.0" \
+    label.color=$WHITE \
+    background.drawing=on \
+    background.color=$ITEM_BG_COLOR \
+    background.corner_radius=6 \
+    background.height=22 \
+    popup.background.color=$ITEM_BG_COLOR \
+    popup.background.corner_radius=6 \
+    popup.background.border_color=$HOT_PURPLE \
+    popup.background.border_width=1 \
+    popup.horizontal=on \
+    popup.align=right \
+    popup.y_offset=4 \
+    click_script="open -a Claude" \
+  --subscribe twin_tasks mouse.entered mouse.exited mouse.exited.global \
+  --add item twin_tasks.tt popup.twin_tasks \
+  --set twin_tasks.tt label.font="SF Mono:Regular:11.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
+  --add item flowen_cheatsheet right \
+  --set flowen_cheatsheet \
+    update_freq=0 \
+    script="$PLUGIN_DIR/flowen_cheatsheet.sh" \
+    icon.font="Hack Nerd Font:Bold:14.0" \
+    label.font="SF Pro:Semibold:12.0" \
+    label.color=$WHITE \
+    background.drawing=on \
+    background.color=$ITEM_BG_COLOR \
+    background.corner_radius=6 \
+    background.height=22 \
+    popup.background.color=$ITEM_BG_COLOR \
+    popup.background.corner_radius=6 \
+    popup.background.border_color=$HOT_PURPLE \
+    popup.background.border_width=1 \
+    popup.horizontal=off \
+    popup.align=right \
+    popup.y_offset=4 \
+    click_script="open -a Claude" \
+  --subscribe flowen_cheatsheet mouse.entered mouse.exited mouse.exited.global \
+  --add item flowen_cheatsheet.tt1 popup.flowen_cheatsheet \
+  --set flowen_cheatsheet.tt1 label.font="SF Mono:Regular:10.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 label.padding_top=4 \
+  --add item flowen_cheatsheet.tt2 popup.flowen_cheatsheet \
+  --set flowen_cheatsheet.tt2 label.font="SF Mono:Regular:10.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
+  --add item flowen_cheatsheet.tt3 popup.flowen_cheatsheet \
+  --set flowen_cheatsheet.tt3 label.font="SF Mono:Regular:10.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
+  --add item flowen_cheatsheet.tt4 popup.flowen_cheatsheet \
+  --set flowen_cheatsheet.tt4 label.font="SF Mono:Regular:10.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
+  --add item flowen_cheatsheet.tt5 popup.flowen_cheatsheet \
+  --set flowen_cheatsheet.tt5 label.font="SF Mono:Regular:10.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
+  --add item flowen_cheatsheet.tt6 popup.flowen_cheatsheet \
+  --set flowen_cheatsheet.tt6 label.font="SF Mono:Regular:10.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
+  --add item flowen_cheatsheet.tt7 popup.flowen_cheatsheet \
+  --set flowen_cheatsheet.tt7 label.font="SF Mono:Regular:10.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
   --add item calendar_event right \
   --set calendar_event \
     update_freq=60 \
     script="$PLUGIN_DIR/calendar_event.sh" \
-    click_script="open -a Calendar" \
+    click_script="open 'https://calendar.google.com/'" \
     icon.font="Hack Nerd Font:Regular:14.0" \
     background.drawing=on \
     background.color=$CAL_EVENT_BG_COLOR \
-    background.corner_radius=8 \
-    background.height=25 \
+    background.corner_radius=6 \
+    background.height=22 \
+    popup.background.color=$ITEM_BG_COLOR \
+    popup.background.corner_radius=6 \
+    popup.background.border_color=$HOT_PURPLE \
+    popup.background.border_width=1 \
+    popup.horizontal=on \
+    popup.align=right \
+    popup.y_offset=4 \
+  --subscribe calendar_event mouse.entered mouse.exited mouse.exited.global \
+  --add item calendar_event.tt popup.calendar_event \
+  --set calendar_event.tt label.font="SF Mono:Regular:11.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
   --add item swap e \
   icon="" \
   label.font="Hack Nerd Font:Italic:13.0" \
