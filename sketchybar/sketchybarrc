@@ -317,6 +317,72 @@ sketchybar --add item refresh right \
   --set flowen_cheatsheet.tt6 label.font="SF Mono:Regular:10.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
   --add item flowen_cheatsheet.tt7 popup.flowen_cheatsheet \
   --set flowen_cheatsheet.tt7 label.font="SF Mono:Regular:10.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
+  --add item ci_status right \
+  --set ci_status \
+    update_freq=60 \
+    script="$PLUGIN_DIR/ci_status.sh" \
+    icon.font="Hack Nerd Font:Bold:14.0" \
+    label.font="SF Pro:Semibold:12.0" \
+    label.color=$WHITE \
+    background.drawing=on \
+    background.color=$ITEM_BG_COLOR \
+    background.corner_radius=6 \
+    background.height=22 \
+    popup.background.color=$ITEM_BG_COLOR \
+    popup.background.corner_radius=6 \
+    popup.background.border_color=$HOT_PURPLE \
+    popup.background.border_width=1 \
+    popup.horizontal=on \
+    popup.align=right \
+    popup.y_offset=4 \
+    click_script="open 'https://github.com/Flowen-AI/flowen-os/actions'" \
+  --subscribe ci_status mouse.entered mouse.exited mouse.exited.global \
+  --add item ci_status.tt popup.ci_status \
+  --set ci_status.tt label.font="SF Mono:Regular:11.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
+  --add item twinion_pulse right \
+  --set twinion_pulse \
+    update_freq=120 \
+    script="$PLUGIN_DIR/twinion_pulse.sh" \
+    icon.font="Hack Nerd Font:Bold:14.0" \
+    label.font="SF Pro:Semibold:12.0" \
+    label.color=$WHITE \
+    background.drawing=on \
+    background.color=$ITEM_BG_COLOR \
+    background.corner_radius=6 \
+    background.height=22 \
+    popup.background.color=$ITEM_BG_COLOR \
+    popup.background.corner_radius=6 \
+    popup.background.border_color=$HOT_PURPLE \
+    popup.background.border_width=1 \
+    popup.horizontal=on \
+    popup.align=right \
+    popup.y_offset=4 \
+    click_script="open -a Claude" \
+  --subscribe twinion_pulse mouse.entered mouse.exited mouse.exited.global \
+  --add item twinion_pulse.tt popup.twinion_pulse \
+  --set twinion_pulse.tt label.font="SF Mono:Regular:11.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
+  --add item pending_approvals right \
+  --set pending_approvals \
+    update_freq=120 \
+    script="$PLUGIN_DIR/pending_approvals.sh" \
+    icon.font="Hack Nerd Font:Bold:14.0" \
+    label.font="SF Pro:Semibold:12.0" \
+    label.color=$WHITE \
+    background.drawing=on \
+    background.color=$ITEM_BG_COLOR \
+    background.corner_radius=6 \
+    background.height=22 \
+    popup.background.color=$ITEM_BG_COLOR \
+    popup.background.corner_radius=6 \
+    popup.background.border_color=$HOT_PURPLE \
+    popup.background.border_width=1 \
+    popup.horizontal=on \
+    popup.align=right \
+    popup.y_offset=4 \
+    click_script="osascript -e 'tell application \"Ghostty\" to activate' && sleep 0.3 && osascript -e 'tell application \"System Events\" to tell process \"Ghostty\" to keystroke \"t\" using command down' && sleep 0.5 && osascript -e 'tell application \"System Events\" to tell process \"Ghostty\" to keystroke \"cd ~/Flowen/twin-andie && claude\n\"'" \
+  --subscribe pending_approvals mouse.entered mouse.exited mouse.exited.global \
+  --add item pending_approvals.tt popup.pending_approvals \
+  --set pending_approvals.tt label.font="SF Mono:Regular:11.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
   --add item calendar_event right \
   --set calendar_event \
     update_freq=60 \

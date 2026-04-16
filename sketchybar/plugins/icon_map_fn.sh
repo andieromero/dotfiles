@@ -683,13 +683,13 @@ function icon_map() {
     icon_result=":whats_app:"
     ;;
   "Windsurf")
-    icon_result=":windsurf:"
+    icon_result=":code:"
     ;;
   "Ghostty")
     icon_result=":ghostty:"
     ;;
   "Wispr Flow" | "Flow" | "Wispr")
-    icon_result=":wispr_flow:"
+    icon_result=":default:"
     ;;
   "Xcode")
     icon_result=":xcode:"
