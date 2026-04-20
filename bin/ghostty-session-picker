@@ -44,11 +44,48 @@ if [ -n "$ZELLIJ_BIN" ]; then
   fi
 fi
 
-# Existing tmux sessions
+# Existing tmux sessions — show Claude session names when running
 if [ -n "$TMUX_BIN" ]; then
-  tmux_sessions=$("$TMUX_BIN" list-sessions -F "#{session_name}" 2>/dev/null || true)
-  if [ -n "$tmux_sessions" ]; then
-    tmux_items=$(echo "$tmux_sessions" | sed 's/^/[tmux] /')
+  SESSIONS_DIR="$HOME/.claude/sessions"
+  tmux_items=""
+
+  # Group by session: for each session, find the best label.
+  # Priority: Claude session name > first window name > session name.
+  while IFS= read -r sess_name; do
+    claude_names=""
+    win_names=""
+
+    while IFS= read -r wline; do
+      # Format: window_name pane_pid
+      win_name="${wline%% *}"
+      pane_pid="${wline##* }"
+      win_names="${win_names:+$win_names, }$win_name"
+
+      # Check if Claude Code is running in this pane
+      if [ -d "$SESSIONS_DIR" ]; then
+        for cpid in $(ps -eo pid,ppid 2>/dev/null | awk -v p="$pane_pid" '$2==p {print $1}'); do
+          if [ -f "$SESSIONS_DIR/$cpid.json" ]; then
+            cname=""
+            if command -v jq &>/dev/null; then
+              cname=$(jq -r '.name // empty' "$SESSIONS_DIR/$cpid.json" 2>/dev/null)
+            fi
+            [ -z "$cname" ] && cname="$win_name"
+            claude_names="${claude_names:+$claude_names, }$cname"
+            break
+          fi
+        done
+      fi
+    done < <("$TMUX_BIN" list-windows -t "$sess_name" -F "#{window_name} #{pane_pid}" 2>/dev/null)
+
+    if [ -n "$claude_names" ]; then
+      item="[tmux / claude] $claude_names§$sess_name"
+    else
+      item="[tmux] $win_names§$sess_name"
+    fi
+    tmux_items="${tmux_items:+$tmux_items\n}$item"
+  done < <("$TMUX_BIN" list-sessions -F "#{session_name}" 2>/dev/null)
+
+  if [ -n "$tmux_items" ]; then
     if [ -n "$choices" ]; then
       choices="$choices\n$tmux_items"
     else
@@ -76,6 +113,8 @@ selected=$(echo -e "$choices" | "$FZF_BIN" \
   --prompt="session > " \
   --header="Select a session or create new" \
   --no-info \
+  --delimiter='§' \
+  --with-nth=1 \
   --color=pointer:green,prompt:blue,header:dim) || {
   # If fzf is cancelled (Esc/Ctrl-C), start plain shell
   exec "$SHELL"
@@ -110,8 +149,19 @@ case "$selected" in
     log "tmux new-session exited with code $rc"
     exec "$SHELL"
     ;;
+  "[tmux / claude]"*)
+    # Extract session name after § delimiter
+    session_name="${selected##*§}"
+    log "attaching tmux (claude): $session_name"
+    set +e
+    "$TMUX_BIN" attach-session -t "$session_name" 2>>"$LOG_FILE"
+    rc=$?
+    log "tmux attach exited with code $rc"
+    exec "$SHELL"
+    ;;
   \[tmux\]\ *)
-    session_name="${selected#\[tmux\] }"
+    # Extract session name after § delimiter
+    session_name="${selected##*§}"
     log "attaching tmux: $session_name"
     set +e
     "$TMUX_BIN" attach-session -t "$session_name" 2>>"$LOG_FILE"
