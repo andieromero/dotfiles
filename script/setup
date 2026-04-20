@@ -9,6 +9,8 @@ echo "Install"
 main () {
   submodules
   symlinks
+  xdg_configs
+  bin_scripts
   platform
   generic
 }
@@ -16,6 +18,40 @@ main () {
 submodules () {
   echo "Initialising submodules"
   git submodule init && git submodule update
+}
+
+xdg_configs () {
+  echo "Symlinking XDG config dirs"
+  mkdir -p "$HOME/.config"
+
+  # ghostty/ → ~/.config/ghostty/
+  if [ -d "$DOTFILES_ROOT/ghostty" ]; then
+    rm -rf "$HOME/.config/ghostty"
+    ln -s "$DOTFILES_ROOT/ghostty" "$HOME/.config/ghostty"
+    success "Linked ghostty → ~/.config/ghostty"
+  fi
+
+  # tmux/ → ~/.config/tmux/
+  if [ -d "$DOTFILES_ROOT/tmux" ]; then
+    rm -rf "$HOME/.config/tmux"
+    ln -s "$DOTFILES_ROOT/tmux" "$HOME/.config/tmux"
+    success "Linked tmux → ~/.config/tmux"
+  fi
+}
+
+bin_scripts () {
+  echo "Symlinking bin scripts"
+  mkdir -p "$HOME/.local/bin"
+
+  if [ -f "$DOTFILES_ROOT/bin/ghostty-session-picker" ]; then
+    ln -sf "$DOTFILES_ROOT/bin/ghostty-session-picker" "$HOME/.local/bin/ghostty-session-picker"
+    success "Linked ghostty-session-picker → ~/.local/bin/"
+  fi
+
+  if [ -f "$DOTFILES_ROOT/bin/claude-tmux-sync" ]; then
+    ln -sf "$DOTFILES_ROOT/bin/claude-tmux-sync" "$HOME/.local/bin/claude-tmux-sync"
+    success "Linked claude-tmux-sync → ~/.local/bin/"
+  fi
 }
 
 platform () {

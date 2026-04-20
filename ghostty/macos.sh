@@ -1,3 +1,3 @@
 #!/bin/bash
-mkdir -p ~/.config
-ln -sf ~/.dotfiles/ghostty ~/.config/ghostty
+# Ghostty config is now symlinked via script/setup → xdg_configs()
+# This file is kept for compatibility with the platform installer loop.

@@ -1,61 +1,33 @@
-#font-family = "IBM Plex Mono"
-font-family = "Iosevka"
-#font-family = "Berkeley Mono"
-#font-family = "Cartograph CF"
-#font-family = "Cascadia Code NF"
-#font-family = "Martian Mono"
-#font-family = "SF Mono"
-#font-family = "Pragmasevka Nerd Font"
-#font-family = "Maple Mono NF"
+theme = Catppuccin Mocha
+font-size = 19
+background-blur-radius = 20
+mouse-hide-while-typing = true
+window-decoration = true
+macos-option-as-alt = true
 
-font-style = "Regular"
-font-size = 16
-adjust-cell-height = 15%
-
-theme = light:Zenbones Light,dark:Zenbones Dark
-
-cursor-style = block
-cursor-color = #dd0455
-cursor-text = #ffffff
-shell-integration-features = no-cursor
-
-window-padding-x = 8
-window-padding-y = 4,8
-window-colorspace = display-p3
-window-height = 36
-window-width = 120
+# Native macOS tabs. Cmd+T creates a grouped window that AeroSpace sees as a
+# new tile; workspace splits between the two Ghostty windows. Use the
+# re-tile flow in the README when this happens (close or merge back).
 macos-titlebar-style = native
+window-new-tab-position = end
 
-# Word navigation
-keybind = opt+arrow_left=text:\x1bb
-keybind = opt+arrow_right=text:\x1bf
-keybind = opt+backspace=text:\x17
+# ---- Claude Code through tmux fixes ----
+# Shift+Enter sends proper escape sequence through tmux
+keybind = shift+enter=text:\x1b[13;2u
 
-# Line navigation
-keybind = cmd+arrow_left=csi:H
-keybind = cmd+arrow_right=csi:F
-keybind = cmd+backspace=text:\x15
+# Tmux prefix (Ctrl+a) handles splits/windows inside tmux.
+# Cmd+T opens a new Ghostty tab (runs the session picker via `command =`).
+# Cmd+N opens a new Ghostty window (also runs the session picker).
+keybind = super+t=new_tab
+keybind = super+n=new_window
+keybind = super+w=close_surface
+keybind = super+c=copy_to_clipboard
+keybind = super+v=paste_from_clipboard
+keybind = super+q=quit
 
-# Command palette
-# keybind = cmd+k=toggle_quick_terminal
+# ---- Session picker on new window ----
+command = ~/.local/bin/ghostty-session-picker
 
-# Tmux window switching (uses physical bracket keys on Ghostty 1.2+)
-keybind = cmd+shift+bracket_left=text:\x02p
-keybind = cmd+shift+bracket_right=text:\x02n
-
-# Tmux window numbers
-keybind = cmd+digit_1=text:\x021
-keybind = cmd+digit_2=text:\x022
-keybind = cmd+digit_3=text:\x023
-keybind = cmd+digit_4=text:\x024
-keybind = cmd+digit_5=text:\x025
-keybind = cmd+digit_6=text:\x026
-keybind = cmd+digit_7=text:\x027
-keybind = cmd+digit_8=text:\x028
-keybind = cmd+digit_9=text:\x029
-
-macos-option-as-alt = right
-# macos-icon = xray
-macos-icon-ghost-color = #ff0000
-macos-icon-screen-color = #0000ff
-keybind = shift+enter=text:\x1b\r
+# Every new Ghostty window opens in the twin-andie repo by default.
+# Override per-session by launching from another cwd.
+working-directory = /Users/casadolimiar/Flowen/twin-andie

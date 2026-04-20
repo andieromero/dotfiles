@@ -78,7 +78,7 @@ cask("transmit")
 cask("vimr")
 cask("vlc")
 cask("webpquicklook")
-cask("wezterm@nightly")
+
 
 cask("font-cascadia-code-nf")
 cask("font-fantasque-sans-mono")
