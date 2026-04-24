@@ -12,7 +12,7 @@ Dev environment for macOS. Ghostty + tmux + AeroSpace + sketchybar + nvim + zsh.
 ### Install
 
 ```sh
-git clone https://github.com/mikker/dotfiles.git ~/Andie/dotfiles
+git clone https://github.com/andieromero/dotfiles.git ~/Andie/dotfiles
 cd ~/Andie/dotfiles
 script/setup
 brew bundle --file=brew/Brewfile.symlink
