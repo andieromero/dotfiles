@@ -52,6 +52,11 @@ bin_scripts () {
     ln -sf "$DOTFILES_ROOT/bin/claude-tmux-sync" "$HOME/.local/bin/claude-tmux-sync"
     success "Linked claude-tmux-sync → ~/.local/bin/"
   fi
+
+  if [ -f "$DOTFILES_ROOT/bin/aerospace-monitor-layout" ]; then
+    ln -sf "$DOTFILES_ROOT/bin/aerospace-monitor-layout" "$HOME/.local/bin/aerospace-monitor-layout"
+    success "Linked aerospace-monitor-layout → ~/.local/bin/"
+  fi
 }
 
 platform () {

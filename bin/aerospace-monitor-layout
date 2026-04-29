@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# aerospace-monitor-layout: Reconfigure AeroSpace workspace-to-monitor
+# assignment based on the current number of connected monitors.
+#
+# Layout rules:
+#   1 monitor  → workspaces 1-8 all on main
+#   2 monitors → 1-4 on main, 5-8 on secondary (non-main), 9 on secondary
+#
+# Usage:
+#   aerospace-monitor-layout          # detect + apply
+#   aerospace-monitor-layout --dry    # show what would change, don't apply
+
+set -euo pipefail
+
+AEROSPACE_CONFIG="${AEROSPACE_CONFIG:-$HOME/.config/aerospace/aerospace.toml}"
+DRY_RUN=false
+[[ "${1:-}" == "--dry" ]] && DRY_RUN=true
+
+# --- Detect monitors ---
+monitor_count=$(aerospace list-monitors --count 2>/dev/null || echo 1)
+monitors_json=$(aerospace list-monitors --json 2>/dev/null || echo '[]')
+
+if (( monitor_count <= 1 )); then
+  layout="single"
+  secondary=""
+else
+  layout="dual"
+  # AeroSpace monitor-id 1 is always the macOS main display.
+  # The secondary is whichever monitor has id != 1.
+  secondary=""
+  while IFS= read -r line; do
+    mid="${line%% *}"
+    mname="${line#* }"
+    if [[ "$mid" != "1" ]]; then
+      secondary="$mname"
+      break
+    fi
+  done < <(aerospace list-monitors --format '%{monitor-id} %{monitor-name}' 2>/dev/null)
+fi
+
+# --- Build the new assignment block ---
+if [[ "$layout" == "single" ]]; then
+  new_block="[workspace-to-monitor-force-assignment]
+1 = 'main'
+2 = 'main'
+3 = 'main'
+4 = 'main'
+5 = 'main'
+6 = 'main'
+7 = 'main'
+8 = 'main'
+9 = 'main'"
+else
+  new_block="[workspace-to-monitor-force-assignment]
+1 = 'main'
+2 = 'main'
+3 = 'main'
+4 = 'main'
+5 = ['$secondary', 'main']
+6 = ['$secondary', 'main']
+7 = ['$secondary', 'main']
+8 = ['$secondary', 'main']
+9 = ['$secondary', 'main']"
+fi
+
+if $DRY_RUN; then
+  echo "Monitors: $monitor_count ($layout)"
+  [[ -n "$secondary" ]] && echo "Secondary: $secondary"
+  echo ""
+  echo "$new_block"
+  exit 0
+fi
+
+# --- Replace the block in the config file ---
+# Remove everything from [workspace-to-monitor-force-assignment] to EOF (it's the last section)
+# and append the new block.
+if grep -q '^\[workspace-to-monitor-force-assignment\]' "$AEROSPACE_CONFIG"; then
+  # Find the line number of the section header
+  section_line=$(grep -n '^\[workspace-to-monitor-force-assignment\]' "$AEROSPACE_CONFIG" | head -1 | cut -d: -f1)
+
+  # Keep everything before the section header, append new block
+  head -n $((section_line - 1)) "$AEROSPACE_CONFIG" > "${AEROSPACE_CONFIG}.tmp"
+  echo "$new_block" >> "${AEROSPACE_CONFIG}.tmp"
+  echo "" >> "${AEROSPACE_CONFIG}.tmp"
+  mv "${AEROSPACE_CONFIG}.tmp" "$AEROSPACE_CONFIG"
+else
+  # Section doesn't exist yet — append
+  echo "" >> "$AEROSPACE_CONFIG"
+  echo "$new_block" >> "$AEROSPACE_CONFIG"
+fi
+
+# --- Reload ---
+aerospace reload-config 2>/dev/null
+
+suffix=""; (( monitor_count > 1 )) && suffix="s"
+echo "AeroSpace: $layout layout applied ($monitor_count monitor${suffix})"
+[[ -n "$secondary" ]] && echo "  main → ws 1-4 | $secondary → ws 5-8"

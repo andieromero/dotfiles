@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
-# claude-tmux-sync: rename the current tmux window to match the Claude Code
-# session name (if renamed) or the project directory basename.
+# claude-tmux-sync: rename the current tmux SESSION + window to match the
+# Claude Code session name (if renamed) or the project directory basename.
+# Ghostty's title bar follows the tmux window name (set-titles in tmux.conf),
+# so renaming the window also updates the Ghostty terminal title.
 #
 # Usage:
-#   1. Claude Code SessionStart hook (automatic — set in ~/.claude/settings.json)
-#   2. Manual: claude-tmux-sync (run in any tmux pane with Claude Code)
+#   1. Claude Code SessionStart hook (fires once, when claude starts)
+#   2. Claude Code Stop hook (fires after each response — picks up /rename)
+#   3. Manual: claude-tmux-sync (run in any tmux pane with Claude Code)
 #
-# The hook receives JSON on stdin with session_id, cwd, etc.
-# When run manually, it walks the process tree to find the session file.
+# The hook receives JSON on stdin with session_id, cwd, etc. When run manually,
+# it walks the process tree to find the session file.
+#
+# Naming priority:
+#   1. tmux user option @claude-name (set by ghostty-session-picker [new] claude)
+#   2. .name field in ~/.claude/sessions/<pid>.json (set by Claude /rename)
+#   3. cwd basename (fallback)
 
 set -euo pipefail
 
@@ -15,6 +23,22 @@ set -euo pipefail
 [ -n "${TMUX:-}" ] || exit 0
 
 SESSIONS_DIR="$HOME/.claude/sessions"
+
+# --- Helper: rename tmux session + window (idempotent) ---
+# Ghostty title follows window via set-titles, so window rename covers terminal title.
+rename_all() {
+  local new_name="$1"
+  [ -z "$new_name" ] && return 0
+  local current_session
+  current_session=$(tmux display-message -p '#{session_name}' 2>/dev/null) || return 0
+  # Sanitize for tmux session names (no ':' or '.').
+  local safe_name
+  safe_name=$(printf '%s' "$new_name" | tr ':.' '--')
+  if [ "$current_session" != "$safe_name" ]; then
+    tmux rename-session -t "$current_session" "$safe_name" 2>/dev/null || true
+  fi
+  tmux rename-window "$new_name" 2>/dev/null || true
+}
 
 # --- Helper: extract name from a session JSON file ---
 extract_name() {
@@ -49,6 +73,16 @@ extract_name() {
   return 1
 }
 
+# --- Highest-priority source: @claude-name tmux user option ---
+# Set by ghostty-session-picker when launching `[new] claude (named tmux + claude)`.
+# If a claude session was created with an explicit name, lock it in and exit;
+# the user's chosen name beats anything Claude auto-discovers.
+forced=$(tmux show-options -v "@claude-name" 2>/dev/null || true)
+if [ -n "$forced" ]; then
+  rename_all "$forced"
+  exit 0
+fi
+
 # --- Mode 1: Called as a hook (stdin has JSON) ---
 # Detect hook mode: stdin is not a terminal AND has data waiting.
 # When called from Claude Code's Bash tool, stdin is a pipe but empty.
@@ -76,7 +110,7 @@ if [ -n "$input" ]; then
         fid=$(grep -o '"sessionId":"[^"]*"' "$f" 2>/dev/null | head -1 | sed 's/"sessionId":"//;s/"//')
       fi
       if [ "$fid" = "$session_id" ]; then
-        name=$(extract_name "$f") && tmux rename-window "$name"
+        name=$(extract_name "$f") && rename_all "$name"
         exit 0
       fi
     done
@@ -84,7 +118,7 @@ if [ -n "$input" ]; then
 
   # Fallback: use cwd basename from hook input
   if [ -n "$cwd" ]; then
-    tmux rename-window "$(basename "$cwd")"
+    rename_all "$(basename "$cwd")"
   fi
   exit 0
 fi
@@ -99,14 +133,14 @@ children=$(ps -eo pid,ppid 2>/dev/null | awk -v p="$pane_pid" '$2==p {print $1}'
 
 for pid in $pane_pid $children; do
   if [ -f "$SESSIONS_DIR/$pid.json" ]; then
-    name=$(extract_name "$SESSIONS_DIR/$pid.json") && tmux rename-window "$name"
+    name=$(extract_name "$SESSIONS_DIR/$pid.json") && rename_all "$name"
     exit 0
   fi
   # Also check grandchildren (claude may spawn under node/etc.)
   grandchildren=$(ps -eo pid,ppid 2>/dev/null | awk -v p="$pid" '$2==p {print $1}')
   for gpid in $grandchildren; do
     if [ -f "$SESSIONS_DIR/$gpid.json" ]; then
-      name=$(extract_name "$SESSIONS_DIR/$gpid.json") && tmux rename-window "$name"
+      name=$(extract_name "$SESSIONS_DIR/$gpid.json") && rename_all "$name"
       exit 0
     fi
   done

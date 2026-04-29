@@ -78,9 +78,9 @@ if [ -n "$TMUX_BIN" ]; then
     done < <("$TMUX_BIN" list-windows -t "$sess_name" -F "#{window_name} #{pane_pid}" 2>/dev/null)
 
     if [ -n "$claude_names" ]; then
-      item="[tmux / claude] $claude_names§$sess_name"
+      item="[tmux / claude] ${claude_names}§${sess_name}"
     else
-      item="[tmux] $win_names§$sess_name"
+      item="[tmux] ${win_names:-$sess_name}§${sess_name}"
     fi
     tmux_items="${tmux_items:+$tmux_items\n}$item"
   done < <("$TMUX_BIN" list-sessions -F "#{session_name}" 2>/dev/null)
@@ -97,6 +97,7 @@ fi
 # New session options
 new_options="[new] Ghostty (plain shell)"
 [ -n "$TMUX_BIN" ] && new_options="$new_options\n[new] tmux"
+[ -n "$TMUX_BIN" ] && new_options="$new_options\n[new] claude (named tmux + claude)"
 [ -n "$ZELLIJ_BIN" ] && new_options="$new_options\n[new] zellij"
 
 if [ -n "$choices" ]; then
@@ -147,6 +148,29 @@ case "$selected" in
     "$TMUX_BIN" new-session -s "ghostty-$$" 2>>"$LOG_FILE"
     rc=$?
     log "tmux new-session exited with code $rc"
+    exec "$SHELL"
+    ;;
+  "[new] claude (named tmux + claude)")
+    # One name shared across:
+    #   - tmux session name
+    #   - tmux window name (→ Ghostty title via set-titles)
+    #   - claude session name (via @claude-name tmux option, honored by claude-tmux-sync)
+    printf "Session name (empty = auto): " > /dev/tty
+    read -r raw_name < /dev/tty
+    # Sanitize: tmux session names disallow ':' and '.'; keep it filesystem-safe.
+    name=$(printf '%s' "$raw_name" | tr -c 'A-Za-z0-9_-' '-' | sed 's/^-*//;s/-*$//')
+    [ -z "$name" ] && name="claude-$$"
+    cd_to_last_dir
+    log "launching new claude tmux session: $name (raw: $raw_name)"
+    set +e
+    # Set the @claude-name option BEFORE claude starts so the SessionStart hook
+    # (claude-tmux-sync) sees it. Then run claude inside the named session.
+    "$TMUX_BIN" new-session -d -s "$name" -n "$name" 2>>"$LOG_FILE"
+    "$TMUX_BIN" set-option -t "$name" "@claude-name" "$name" 2>>"$LOG_FILE"
+    "$TMUX_BIN" send-keys -t "$name" "claude" Enter 2>>"$LOG_FILE"
+    "$TMUX_BIN" attach-session -t "$name" 2>>"$LOG_FILE"
+    rc=$?
+    log "tmux new claude-session exited with code $rc"
     exec "$SHELL"
     ;;
   "[tmux / claude]"*)
