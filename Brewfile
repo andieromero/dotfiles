@@ -39,6 +39,7 @@ cask "ghostty"                       # Terminal
 cask "karabiner-elements"            # Keyboard remapper
 cask "1password-cli"                 # 1Password CLI (SSH agent support)
 cask "claude-code"                   # Anthropic's CLI coding agent
+brew "opencode"                      # Multi-provider AI coding agent (specialist tool — parallel sessions, cross-provider checks)
 cask "windsurf"                      # Code editor (alt-c)
 cask "google-chrome"                 # Browser (alt-b)
 cask "slack"                         # Chat (alt-s)

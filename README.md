@@ -11,8 +11,9 @@ This repo serves two audiences. Skim the column that matches you.
 | Full bootstrap (Homebrew + Brewfile + symlinks) | **Required** | **Required** |
 | AeroSpace + SketchyBar + JankyBorders + Karabiner | **Required** — this is the WM foundation | **Required** |
 | Ghostty + tmux + zsh + Starship | **Required** | **Recommended** (any terminal works, but shell aliases expect zsh) |
-| Flowen / TWIN OS pills (`ccusage`, `claude_session`, `brain_freshness`, `twin_tasks`, `wispr`) | **Core** — edit the plugin scripts | **Core** — the reason this repo exists for you |
+| Flowen / TWIN OS pills (`ccusage`, `claude_session`, `opencode_session`, `brain_freshness`, `twin_tasks`, `wispr`) | **Core** — edit the plugin scripts | **Core** — the reason this repo exists for you |
 | `ccusage` via `npm i -g ccusage` | Required | Required (only if using Claude Code) |
+| `opencode` (multi-provider AI coding agent) | Optional — specialist tool for parallel sessions / cross-provider checks | Optional — Claude Code stays the primary harness; `opencode` is the overflow / second-opinion lane |
 | `wispr-flow` cask + Login Item | Recommended | Required for voice-to-text pill |
 | `ical-buddy` + Calendar permission | Recommended | Recommended (next-event pill) |
 | Custom plugins under `sketchybar/plugins/` | **Edit freely** | Treat as black boxes, don't modify |
@@ -73,6 +74,7 @@ Intel Macs will technically work but paths in `zshrc` point to `/opt/homebrew`; 
 | `starship.toml` | [Starship](https://starship.rs) prompt |
 | `zshrc` | zsh shell config (symlinked to `~/.zshrc`) |
 | `gh/` | GitHub CLI config |
+| `opencode/opencode.json` | [opencode](https://opencode.ai) — multi-provider AI coding agent (specialist; coexists with Claude Code) |
 
 ## Bootstrapping a fresh machine
 
@@ -312,6 +314,7 @@ Hot pink / hot purple theme. Shows workspaces 1–8 with themed Nerd Font icons;
 | Bluetooth | Bluetooth glyph | Icon-only (no count). **Click:** opens Bluetooth in System Settings. |
 | **ccusage** | Lightning bolt | `$cost · X% · Ym` — active 5-hour block cost, % of block consumed, minutes remaining. Green <$3/h, yellow <$8/h, red ≥$8/h. **Hover:** model, projected block total, output/cache tokens, today's total cost, block reset time. Explains that this is a 5-hour rolling rate limit (not daily or monthly). **Click:** opens Claude.app. Requires `npm install -g ccusage`. |
 | **Claude session** | Robot | `N× <project>` — shows when `claude` processes are running, with the most-recent project dir as hint. Hidden when no claude process. **Hover:** top 5 recent project dirs with mtime age. **Click:** opens Claude.app. |
+| **Opencode session** | Cyan robot | `N× <project>` — same idea as Claude session but for `opencode` procs. Hidden when no opencode process. **Hover:** top 5 recent session log dirs with mtime age. Cost data not surfaced (opencode `stats` available but too slow for 5s polling — revisit if a streaming source appears). |
 | **Brain freshness** | Brain | `<Name> twins Nm/Nh/Nd` — age of `brain-health/progress.md`. Dynamic name derived from `~/Flowen/twin-<name>/` directory. Green <6h, yellow <24h, red ≥24h. **Hover:** exact timestamp + first section heading. **Click:** opens Claude.app. |
 | **TWIN tasks** | Task list | `N open · X%` — open `- [ ]` checkbox count across `experiences/plans/*.md` with completion percentage. Green if 0 open, yellow <5, red ≥5. **Hover:** top-3 plans by open count. **Click:** opens Claude.app. |
 | **Calendar** | Calendar | `{title 4 chars}... now` if a meeting is active, or `{title 4 chars}... in Xhr Ymin` for the next meeting. Queries Calendar.app via AppleScript (skips all-day events, holidays, birthdays). **Hover:** full title + time + calendar name. **Click:** opens Google Calendar in browser. |
@@ -664,11 +667,16 @@ Right-side sketchybar pills that surface information from your TWIN OS brain and
 |---|---|---|---|---|
 | ccusage | `plugins/ccusage.sh` | `$cost · X% · Ym` — 5-hour block cost, % consumed, minutes left. Color-coded by burn rate. | Lightning bolt | `npm install -g ccusage` |
 | Claude session | `plugins/claude_session.sh` | `N× <project>` — active Claude Code processes + recent project. Hidden when idle. | Robot | Claude Code CLI |
+| Opencode session | `plugins/opencode_session.sh` | `N× <project>` — active opencode processes + recent project (parsed from log files). Hidden when idle. | Cyan robot | `brew install opencode` |
 | `<Name>` twins | `plugins/brain_freshness.sh` | Age of `brain-health/progress.md`. Green <6h, yellow <24h, red ≥24h. | Brain | `$HOME/Flowen/twin-<name>/brain-health/progress.md` |
 | TWIN tasks | `plugins/twin_tasks.sh` | `N open · X%` — open `- [ ]` checkboxes across `experiences/plans/*.md`. | Task list | `$HOME/Flowen/twin-<name>/experiences/plans/` |
 | Calendar | `plugins/calendar_event.sh` | `{4-char title}... now` or `...in Xhr Ymin`. Queries Calendar.app via AppleScript, skipping all-day events and holiday calendars. Click opens Google Calendar. | Calendar | Calendar.app synced with Google (via Internet Accounts) |
 
 All five pills have **hover tooltips** (right-aligned popups) with expanded detail: token projections, plan breakdowns, exact timestamps, and meeting info.
+
+### Why opencode coexists with Claude Code (not replaces it)
+
+Claude Code is the primary harness — it's where the TWIN OS workflow lives (`/plan`, `/work`, `/learn`), where auto-memory persists across sessions, and where the SketchyBar pills source most of their data. `opencode` is added as a **specialist tool** for three jobs Claude Code doesn't do well: (1) parallel sessions on the same repo when you want two agents working in parallel, (2) routing through non-Anthropic providers (Gemini / GPT / local models) for cross-checks or when the Anthropic 5-hour rate limit hits mid-flight, and (3) staying productive if Claude Code's pricing or product direction shifts. Memories, skills, and slash-commands stay Claude-Code-specific — `opencode` is the overflow lane, not the daily driver. **Parallel-session warning:** running two AI agents on the same working tree will stomp edits — use `git worktree add` to isolate each session before doing parallel work.
 
 **Wispr Flow** is not shown in the bar — it uses its own native overlay at the bottom of the screen. Wispr Flow is added to macOS Login Items so the dictation hotkey is available immediately on boot. Grant Accessibility + Input Monitoring + Microphone to both the outer app and the inner helper at `/Applications/Wispr Flow.app/Contents/Resources/swift-helper-app-dist/Wispr Flow.app`.
 
