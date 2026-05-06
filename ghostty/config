@@ -11,6 +11,23 @@ macos-option-as-alt = true
 macos-titlebar-style = native
 window-new-tab-position = end
 
+# ---- Claude Code through tmux fixes ----
+# Shift+Enter sends proper escape sequence through tmux
+keybind = shift+enter=text:\x1b[13;2u
+
+# Tmux prefix (Ctrl+a) handles splits/windows inside tmux.
+# Cmd+T opens a new Ghostty tab (runs the session picker via `command =`).
+# Cmd+N opens a new Ghostty window (also runs the session picker).
+keybind = super+t=new_tab
+keybind = super+n=new_window
+keybind = super+w=close_surface
+keybind = super+c=copy_to_clipboard
+keybind = super+v=paste_from_clipboard
+keybind = super+q=quit
+
+# ---- Session picker on new window ----
+command = ~/.local/bin/ghostty-session-picker
+
 # Every new Ghostty window opens in the twin-andie repo by default.
 # Override per-session by launching from another cwd.
 working-directory = /Users/casadolimiar/Flowen/twin-andie

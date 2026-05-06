@@ -57,6 +57,28 @@ else
   PILL_BORDER_COLOR="$HOT_PURPLE"
 fi
 
+# Wispr Flow recording override: if Wispr is recording AND this is the focused
+# workspace, replace pill colors with the pulse phase set by wispr_indicator.sh.
+# Sharing the tick file keeps both scripts in lockstep so update_freq=2 here
+# doesn't fight update_freq=1 there.
+WISPR_STATE_FILE=/tmp/wispr_state
+WISPR_TICK_FILE=/tmp/wispr_tick
+if [ "$SID" = "$KEYBOARD_FOCUSED" ] \
+  && [ -f "$WISPR_STATE_FILE" ] \
+  && [ "$(cat "$WISPR_STATE_FILE" 2>/dev/null)" = "recording" ]; then
+  WISPR_TICK=0
+  [ -f "$WISPR_TICK_FILE" ] && WISPR_TICK=$(cat "$WISPR_TICK_FILE")
+  if [ "$WISPR_TICK" = "0" ]; then
+    PILL_BG=0xffff1493
+    PILL_BORDER_COLOR=0xffffea00
+    PILL_BORDER_WIDTH=3
+  else
+    PILL_BG=0xff8b0040
+    PILL_BORDER_COLOR=0xff8b0040
+    PILL_BORDER_WIDTH=1
+  fi
+fi
+
 sketchybar --set "$NAME" \
   background.color="$PILL_BG" \
   background.border_color="$PILL_BORDER_COLOR" \

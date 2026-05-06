@@ -37,6 +37,9 @@ done
 # Trigger the aerospace event so each pill's script runs (updates active state + notification border)
 sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE="$(aerospace list-workspaces --focused)"
 
+# Reconfigure monitor layout (detects plugged/unplugged monitors)
+"$HOME/.local/bin/aerospace-monitor-layout" >/dev/null 2>&1 || true
+
 # Nudge every status item on the right side to refresh
 sketchybar --update
 

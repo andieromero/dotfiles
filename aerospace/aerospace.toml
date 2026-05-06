@@ -10,7 +10,12 @@
 # You can use it to add commands that run after AeroSpace startup.
 # 'after-startup-command' is run after 'after-login-command'
 # Available commands : https://nikitabobko.github.io/AeroSpace/commands
-after-startup-command = ['exec-and-forget borders active_color=0xffe1e3e4 inactive_color=0xff494d64 width=5.0 >/dev/null 2>&1 & disown']
+# Borders is managed by the LaunchAgent at ~/Library/LaunchAgents/com.user.borders.plist
+# which sources ~/.config/borders/bordersrc → pink. The previous command here
+# spawned a second `borders` with hardcoded grey args that raced with (and
+# usually clobbered) the LaunchAgent. Re-running bordersrc here keeps the
+# pink config consistent even if AeroSpace starts after the LaunchAgent.
+after-startup-command = ['exec-and-forget /bin/bash -lc "$HOME/.config/borders/bordersrc >/dev/null 2>&1 & disown"']
 
 # Start AeroSpace at login
 start-at-login = true 
@@ -114,9 +119,10 @@ alt-c = 'exec-and-forget open -a "Windsurf"'              # Code editor (workspa
 alt-t = 'exec-and-forget open -a "Ghostty"'               # Terminal (workspace 3)
 alt-o = 'exec-and-forget open -a "Microsoft Outlook"'     # Email (workspace 4)
 alt-s = 'exec-and-forget open -a "Slack"'                 # Chat (workspace 6)
-alt-w = 'exec-and-forget open -a "Obsidian"'              # Notes (workspace 9)
+alt-w = 'exec-and-forget open -a "Obsidian"'              # Notes
 alt-p = 'exec-and-forget open -a "Adobe Premiere Pro 2024"'
 alt-shift-r = ['exec-and-forget /opt/homebrew/bin/sketchybar --reload']
+alt-shift-m = 'exec-and-forget ~/.local/bin/aerospace-monitor-layout'  # Reconfigure monitor layout
 
 # See: https://nikitabobko.github.ioeAeroSpace/commands#layout
 alt-e = 'layout tiles horizontal vertical'
@@ -124,7 +130,7 @@ alt-comma = 'layout accordion horizontal vertical'
 alt-f = 'fullscreen'
 alt-y = ['focus right', 'join-with down', 'layout tiles horizontal']
 
-# ---- cmd-prefixed layout toggles (consistent with cmd+1..9 workspace flow) ----
+# ---- cmd-prefixed layout toggles (consistent with cmd+1..8 workspace flow) ----
 cmd-backslash   = 'layout tiles horizontal vertical'      # tiles H <-> V
 cmd-slash       = 'layout accordion horizontal vertical'  # accordion H <-> V
 cmd-period      = 'layout tiles accordion'                # tiles <-> accordion
@@ -160,7 +166,7 @@ alt-shift-l = 'move right'
 alt-shift-minus = 'resize smart -50'
 alt-shift-equal = 'resize smart +50'
 
-# Switch to workspace — cmd-1..9 (overrides macOS/app defaults for these combos)
+# Switch to workspace — cmd-1..8 (overrides macOS/app defaults for these combos)
 cmd-1 = 'workspace 1'
 cmd-2 = 'workspace 2'
 cmd-3 = 'workspace 3'
@@ -169,21 +175,17 @@ cmd-5 = 'workspace 5'
 cmd-6 = 'workspace 6'
 cmd-7 = 'workspace 7'
 cmd-8 = 'workspace 8'
-cmd-9 = 'workspace 9'
 
-# Move focused window to workspace — hyper+1..9
-# (hyper = cmd+alt+ctrl+shift, produced by pressing caps lock via Karabiner).
-# caps+N sends the focused window to workspace N in one keystroke.
-# cmd+tab stays native for the macOS app switcher.
-cmd-alt-ctrl-shift-1 = 'move-node-to-workspace 1'
-cmd-alt-ctrl-shift-2 = 'move-node-to-workspace 2'
-cmd-alt-ctrl-shift-3 = 'move-node-to-workspace 3'
-cmd-alt-ctrl-shift-4 = 'move-node-to-workspace 4'
-cmd-alt-ctrl-shift-5 = 'move-node-to-workspace 5'
-cmd-alt-ctrl-shift-6 = 'move-node-to-workspace 6'
-cmd-alt-ctrl-shift-7 = 'move-node-to-workspace 7'
-cmd-alt-ctrl-shift-8 = 'move-node-to-workspace 8'
-cmd-alt-ctrl-shift-9 = 'move-node-to-workspace 9'
+# Move focused window to workspace — ctrl+cmd+N
+# (mirrors cmd+N for switching, add ctrl to move the window along)
+ctrl-cmd-1 = 'move-node-to-workspace 1'
+ctrl-cmd-2 = 'move-node-to-workspace 2'
+ctrl-cmd-3 = 'move-node-to-workspace 3'
+ctrl-cmd-4 = 'move-node-to-workspace 4'
+ctrl-cmd-5 = 'move-node-to-workspace 5'
+ctrl-cmd-6 = 'move-node-to-workspace 6'
+ctrl-cmd-7 = 'move-node-to-workspace 7'
+ctrl-cmd-8 = 'move-node-to-workspace 8'
 
 # See: https://nikitabobko.github.io/AeroSpace/commands#workspace-back-and-forth
 alt-tab = 'workspace-back-and-forth'
@@ -243,24 +245,13 @@ if.app-id = 'com.1password.1password'
 if.window-title-regex-substring = 'Quick Access'
 run = ['layout floating']
 
-# Workspace -> monitor force assignment.
-#
-# Pinned by monitor NAME (not by 'main'/'secondary') so the layout is
-# independent of macOS's main-display setting.
-#
-#   HP E27 G5  -> active loop (5-8): Ghostty, Windsurf, Chrome, overflow
-#   USB C2     -> reference (1-4):   scratch, Slack, free, free
-#
-# Each pin ends with 'main' as a fallback. When only one display is attached
-# (laptop on the go, or only one external connected), every workspace collapses
-# to that single display automatically.
 [workspace-to-monitor-force-assignment]
-1 = ['USB C2', 'main']           # Free / scratch
-2 = ['USB C2', 'main']           # Slack
-3 = ['USB C2', 'main']           # Free
-4 = ['USB C2', 'main']           # Free
-5 = ['HP E27 G5', 'main']        # Ghostty
-6 = ['HP E27 G5', 'main']        # Windsurf
-7 = ['HP E27 G5', 'main']        # Chrome
-8 = ['HP E27 G5', 'main']        # Overflow / inbox (unpinned apps)
-9 = ['USB C2', 'main']           # Hidden scratch (Obsidian / Messages)
+1 = ['Studio Display', 'main']
+2 = ['Studio Display', 'main']
+3 = ['Studio Display', 'main']
+4 = ['Studio Display', 'main']
+5 = 'main'
+6 = 'main'
+7 = 'main'
+8 = 'main'
+

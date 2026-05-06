@@ -44,3 +44,19 @@ gitleaks-report.json
 dev sketchybar/
 zsh/
 dotfiles/
+
+# Big binaries that don't belong in a dotfiles repo
+bin/web
+bin/wedl
+bin/$
+
+# Secrets / personal CLI configs
+graphite/
+devin/
+
+# Junk / accidental files
+-1
+tmux/*.predotfiles-backup
+
+# TPM-installed plugins (re-fetched by tpm)
+tmux/plugins/

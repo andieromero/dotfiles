@@ -159,13 +159,12 @@ alias gt-next='ghostty-next-tab'
 alias gt-prev='ghostty-prev-tab'
 
 # ---- Auto-attach to tmux ----
-# Every interactive shell that isn't already inside tmux attaches to (or creates)
-# a session named "main". Ghostty tabs all share this session, so your work
-# persists across terminal restarts and crashes.
-# To stay out of tmux for a specific session, prefix the command:  NO_TMUX=1 zsh
-if command -v tmux >/dev/null 2>&1 && [ -z "$TMUX" ] && [ -z "$NO_TMUX" ] && [ -n "$PS1" ]; then
-  tmux attach -t main 2>/dev/null || tmux new -s main
-fi
+# Disabled: Ghostty's session picker (ghostty-session-picker) handles tmux
+# session creation/attachment on window open. This block was conflicting with it.
+# To restore: uncomment the lines below.
+# if command -v tmux >/dev/null 2>&1 && [ -z "$TMUX" ] && [ -z "$NO_TMUX" ] && [ -n "$PS1" ]; then
+#   tmux attach -t main 2>/dev/null || tmux new -s main
+# fi
 
 # ---- Project paths ----
 # Environment variables pointing at the repos. Use these from any command:

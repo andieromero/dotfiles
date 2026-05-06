@@ -57,18 +57,20 @@ sketchybar --add event aerospace_mode_changed
 
 # Refresh button moved to the far right of the bar — see end of the right chain below.
 
-# Add workspaces 1-8 only (workspace 9 is secondary scratch, not shown in bar).
-# Pills render on every attached display so the bar is consistent no matter
-# which monitor you're looking at.
+# Add workspaces 1-8. Pills render on every attached display so the bar is
+# consistent no matter which monitor you're looking at.
+#
+# Hardcoded 1..8 instead of `aerospace list-workspaces --all` because at cold
+# login sketchybar (homebrew launchd) starts before AeroSpace is ready —
+# the query returns empty and no workspace pills get added until a manual
+# sketchybar reload. AeroSpace is configured with workspaces 1-8 anyway
+# (see aerospace.toml on-window-detected rules), so the list is stable.
 #
 # Icons come from Hack Nerd Font (already set as default icon.font). The
 # mapping reflects the workspace layout:
 #   1 browser   2 code     3 terminal  4 email
 #   5 free      6 chat     7 music     8 meetings
-for sid in $(aerospace list-workspaces --all); do
-    if ! [[ "$sid" =~ ^[0-9]+$ ]]; then continue; fi
-    if [ "$sid" -gt 8 ]; then continue; fi
-
+for sid in 1 2 3 4 5 6 7 8; do
     # Icons match the new layout:
     #   1 scratch/secondary   2 chat (Slack)       3 free       4 free
     #   5 terminal            6 code               7 browser    8 overflow/inbox
@@ -116,6 +118,30 @@ for sid in $(aerospace list-workspaces --all); do
       label.color=$WHITE \
       click_script="aerospace workspace $sid" \
       script="$CONFIG_DIR/plugins/aerospace.sh $sid"
+
+    # Vertical divider between workspace 4 and 5 (main | secondary split)
+    if [ "$sid" -eq 4 ]; then
+      monitor_count=$(aerospace list-monitors --count 2>/dev/null || echo 1)
+      if (( monitor_count > 1 )); then
+        divider_drawing="on"
+      else
+        divider_drawing="off"
+      fi
+      sketchybar --add item ws_divider left \
+        --set ws_divider \
+          drawing="$divider_drawing" \
+          icon="┃" \
+          icon.font="Hack Nerd Font:Bold:18.0" \
+          icon.color=0xffffffff \
+          icon.padding_left=4 \
+          icon.padding_right=8 \
+          label.drawing=off \
+          background.drawing=off \
+          padding_left=2 \
+          padding_right=2 \
+          update_freq=30 \
+          script="$PLUGIN_DIR/ws_divider.sh"
+    fi
 done
 
 # Initial populate
@@ -124,6 +150,57 @@ for sid in 1 2 3 4 5 6 7 8; do
 done
 wait
 
+# Monitor count indicator — sits on the left, immediately after pill 8.
+# Plain text styling (matches the `tiles` front_app_layout pill, not the
+# big workspace-pill style). Click → hard-restart AeroSpace + reapply layout.
+sketchybar --add item monitor_layout left \
+  --set monitor_layout \
+    update_freq=30 \
+    script="$PLUGIN_DIR/monitor_layout.sh" \
+    padding_left=6 \
+    padding_right=2 \
+    icon.drawing=on \
+    icon.font="Hack Nerd Font:Regular:14.0" \
+    icon.color=$WHITE \
+    icon.padding_left=2 \
+    icon.padding_right=4 \
+    label.drawing=on \
+    label.font="SF Pro:Semibold:9.0" \
+    label.color=$WHITE \
+    label.padding_left=0 \
+    label.padding_right=4 \
+    background.drawing=on \
+    background.color=$FRONT_APP_LAYOUT_BG_COLOR \
+    background.corner_radius=4 \
+    background.height=18 \
+    popup.background.color=$ITEM_BG_COLOR \
+    popup.background.corner_radius=6 \
+    popup.background.border_color=$HOT_PURPLE \
+    popup.background.border_width=1 \
+    popup.horizontal=on \
+    popup.align=left \
+    popup.y_offset=4 \
+    click_script="$HOME/.local/bin/aerospace-monitor-layout --restart >/dev/null 2>&1; sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=\$(aerospace list-workspaces --focused); sketchybar --set monitor_layout icon.color=$HOT_PINK; sleep 0.3; sketchybar --set monitor_layout icon.color=$WHITE" \
+  --subscribe monitor_layout display_change mouse.entered mouse.exited mouse.exited.global \
+  --add item monitor_layout.tt popup.monitor_layout \
+  --set monitor_layout.tt label.font="SF Mono:Regular:11.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8
+
+
+# Wispr Flow recording indicator — pinned center, pulses when transcribing.
+# Hidden when Wispr is closed, dim mic when idle, big flashing REC pill when
+# the mic is active. Also pulses the bar border, the focused workspace pill,
+# and the JankyBorders active window border. See plugins/wispr_indicator.sh.
+sketchybar --add item wispr_indicator e \
+  --set wispr_indicator \
+    update_freq=1 \
+    drawing=off \
+    icon.font="Hack Nerd Font:Bold:14.0" \
+    label.font="SF Pro:Semibold:13.0" \
+    label.padding_left=4 \
+    label.padding_right=8 \
+    icon.padding_left=8 \
+    icon.padding_right=4 \
+    script="$PLUGIN_DIR/wispr_indicator.sh"
 
 # Chevron separator between workspace pills and the front-app block
 sketchybar --add item chevron left \
@@ -195,6 +272,28 @@ sketchybar --add item refresh right \
   --set bluetooth update_freq=30 script="$PLUGIN_DIR/bluetooth.sh" \
     click_script="open /System/Library/PreferencePanes/Bluetooth.prefPane" \
   --subscribe bluetooth system_woke \
+  --add item claude_context right \
+  --set claude_context \
+    update_freq=10 \
+    script="$PLUGIN_DIR/claude_context.sh" \
+    icon.font="Hack Nerd Font:Bold:14.0" \
+    label.font="SF Pro:Semibold:12.0" \
+    label.color=$WHITE \
+    background.drawing=on \
+    background.color=$ITEM_BG_COLOR \
+    background.corner_radius=6 \
+    background.height=22 \
+    popup.background.color=$ITEM_BG_COLOR \
+    popup.background.corner_radius=6 \
+    popup.background.border_color=$HOT_PURPLE \
+    popup.background.border_width=1 \
+    popup.horizontal=on \
+    popup.align=right \
+    popup.y_offset=4 \
+    click_script="open -a Claude" \
+  --subscribe claude_context mouse.entered mouse.exited mouse.exited.global \
+  --add item claude_context.tt popup.claude_context \
+  --set claude_context.tt label.font="SF Mono:Regular:11.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
   --add item ccusage right \
   --set ccusage \
     update_freq=20 \
