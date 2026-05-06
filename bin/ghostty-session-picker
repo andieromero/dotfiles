@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+# ghostty-session-picker: fzf-based session picker for Ghostty startup
+# https://github.com/coa00/ghostty-session-picker
+
+set -euo pipefail
+
+ZELLIJ_BIN="${ZELLIJ_BIN:-$(command -v zellij 2>/dev/null || echo "")}"
+TMUX_BIN="${TMUX_BIN:-$(command -v tmux 2>/dev/null || echo "/opt/homebrew/bin/tmux")}"
+FZF_BIN="${FZF_BIN:-$(command -v fzf 2>/dev/null || echo "/opt/homebrew/bin/fzf")}"
+LOG_FILE="${GHOSTTY_SESSION_PICKER_LOG:-$HOME/.local/share/ghostty-session-picker.log}"
+
+if [ -z "$FZF_BIN" ]; then
+  echo "Error: fzf is required. Install it with: brew install fzf" >&2
+  exec "$SHELL"
+fi
+
+log() {
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [$$] $*" >> "$LOG_FILE"
+}
+
+# Restore last working directory
+cd_to_last_dir() {
+  local dir=""
+  if [ -n "${TMUX:-}" ] && [ -n "$TMUX_BIN" ]; then
+    dir=$("$TMUX_BIN" display-message -p -t '{last}' '#{pane_current_path}' 2>/dev/null || true)
+  fi
+  if [ -z "$dir" ] && [ -f "$HOME/.last_working_dir" ]; then
+    dir=$(cat "$HOME/.last_working_dir")
+  fi
+  if [ -n "$dir" ] && [ -d "$dir" ]; then
+    log "cd to last dir: $dir"
+    cd "$dir"
+  fi
+}
+
+# Build the selection list
+choices=""
+
+# Existing zellij sessions (only if zellij is installed)
+if [ -n "$ZELLIJ_BIN" ]; then
+  zellij_sessions=$("$ZELLIJ_BIN" list-sessions --no-formatting --short 2>/dev/null || true)
+  if [ -n "$zellij_sessions" ]; then
+    choices=$(echo "$zellij_sessions" | sed 's/^/[zellij] /')
+  fi
+fi
+
+# Existing tmux sessions — show Claude session names when running
+if [ -n "$TMUX_BIN" ]; then
+  SESSIONS_DIR="$HOME/.claude/sessions"
+  tmux_items=""
+
+  # Group by session: for each session, find the best label.
+  # Priority: Claude session name > first window name > session name.
+  while IFS= read -r sess_name; do
+    claude_names=""
+    win_names=""
+
+    while IFS= read -r wline; do
+      # Format: window_name pane_pid
+      win_name="${wline%% *}"
+      pane_pid="${wline##* }"
+      win_names="${win_names:+$win_names, }$win_name"
+
+      # Check if Claude Code is running in this pane
+      if [ -d "$SESSIONS_DIR" ]; then
+        for cpid in $(ps -eo pid,ppid 2>/dev/null | awk -v p="$pane_pid" '$2==p {print $1}'); do
+          if [ -f "$SESSIONS_DIR/$cpid.json" ]; then
+            cname=""
+            if command -v jq &>/dev/null; then
+              cname=$(jq -r '.name // empty' "$SESSIONS_DIR/$cpid.json" 2>/dev/null)
+            fi
+            [ -z "$cname" ] && cname="$win_name"
+            claude_names="${claude_names:+$claude_names, }$cname"
+            break
+          fi
+        done
+      fi
+    done < <("$TMUX_BIN" list-windows -t "$sess_name" -F "#{window_name} #{pane_pid}" 2>/dev/null)
+
+    if [ -n "$claude_names" ]; then
+      item="[tmux / claude] ${claude_names}§${sess_name}"
+    else
+      item="[tmux] ${win_names:-$sess_name}§${sess_name}"
+    fi
+    tmux_items="${tmux_items:+$tmux_items\n}$item"
+  done < <("$TMUX_BIN" list-sessions -F "#{session_name}" 2>/dev/null)
+
+  if [ -n "$tmux_items" ]; then
+    if [ -n "$choices" ]; then
+      choices="$choices\n$tmux_items"
+    else
+      choices="$tmux_items"
+    fi
+  fi
+fi
+
+# New session options
+new_options="[new] Ghostty (plain shell)"
+[ -n "$TMUX_BIN" ] && new_options="$new_options\n[new] tmux"
+[ -n "$TMUX_BIN" ] && new_options="$new_options\n[new] claude (named tmux + claude)"
+[ -n "$ZELLIJ_BIN" ] && new_options="$new_options\n[new] zellij"
+
+if [ -n "$choices" ]; then
+  choices="$new_options\n$choices"
+else
+  choices="$new_options"
+fi
+
+# Show fzf picker
+selected=$(echo -e "$choices" | "$FZF_BIN" \
+  --height=~50% \
+  --layout=reverse \
+  --border=rounded \
+  --prompt="session > " \
+  --header="Select a session or create new" \
+  --no-info \
+  --delimiter='§' \
+  --with-nth=1 \
+  --color=pointer:green,prompt:blue,header:dim) || {
+  # If fzf is cancelled (Esc/Ctrl-C), start plain shell
+  exec "$SHELL"
+}
+
+log "selected: $selected"
+
+case "$selected" in
+  "[new] Ghostty (plain shell)")
+    log "launching plain shell"
+    cd_to_last_dir
+    exec "$SHELL"
+    ;;
+  "[new] zellij")
+    printf "Session name (empty for default): " > /dev/tty
+    read -r session_name < /dev/tty
+    cd_to_last_dir
+    if [ -z "$session_name" ]; then
+      log "launching new zellij (default name)"
+      exec "$ZELLIJ_BIN"
+    else
+      log "launching new zellij: $session_name"
+      exec "$ZELLIJ_BIN" -s "$session_name"
+    fi
+    ;;
+  "[new] tmux")
+    log "launching new tmux: ghostty-$$"
+    cd_to_last_dir
+    set +e
+    "$TMUX_BIN" new-session -s "ghostty-$$" 2>>"$LOG_FILE"
+    rc=$?
+    log "tmux new-session exited with code $rc"
+    exec "$SHELL"
+    ;;
+  "[new] claude (named tmux + claude)")
+    # One name shared across:
+    #   - tmux session name
+    #   - tmux window name (→ Ghostty title via set-titles)
+    #   - claude session name (via @claude-name tmux option, honored by claude-tmux-sync)
+    printf "Session name (empty = auto): " > /dev/tty
+    read -r raw_name < /dev/tty
+    # Sanitize: tmux session names disallow ':' and '.'; keep it filesystem-safe.
+    name=$(printf '%s' "$raw_name" | tr -c 'A-Za-z0-9_-' '-' | sed 's/^-*//;s/-*$//')
+    [ -z "$name" ] && name="claude-$$"
+    cd_to_last_dir
+    log "launching new claude tmux session: $name (raw: $raw_name)"
+    set +e
+    # Set the @claude-name option BEFORE claude starts so the SessionStart hook
+    # (claude-tmux-sync) sees it. Then run claude inside the named session.
+    "$TMUX_BIN" new-session -d -s "$name" -n "$name" 2>>"$LOG_FILE"
+    "$TMUX_BIN" set-option -t "$name" "@claude-name" "$name" 2>>"$LOG_FILE"
+    "$TMUX_BIN" send-keys -t "$name" "claude" Enter 2>>"$LOG_FILE"
+    "$TMUX_BIN" attach-session -t "$name" 2>>"$LOG_FILE"
+    rc=$?
+    log "tmux new claude-session exited with code $rc"
+    exec "$SHELL"
+    ;;
+  "[tmux / claude]"*)
+    # Extract session name after § delimiter
+    session_name="${selected##*§}"
+    log "attaching tmux (claude): $session_name"
+    set +e
+    "$TMUX_BIN" attach-session -t "$session_name" 2>>"$LOG_FILE"
+    rc=$?
+    log "tmux attach exited with code $rc"
+    exec "$SHELL"
+    ;;
+  \[tmux\]\ *)
+    # Extract session name after § delimiter
+    session_name="${selected##*§}"
+    log "attaching tmux: $session_name"
+    set +e
+    "$TMUX_BIN" attach-session -t "$session_name" 2>>"$LOG_FILE"
+    rc=$?
+    log "tmux attach exited with code $rc"
+    exec "$SHELL"
+    ;;
+  \[zellij\]\ *)
+    session_name="${selected#\[zellij\] }"
+    log "attaching zellij: $session_name"
+    exec "$ZELLIJ_BIN" attach "$session_name"
+    ;;
+  *)
+    log "unknown selection: $selected"
+    exec "$SHELL"
+    ;;
+esac
