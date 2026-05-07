@@ -147,9 +147,17 @@ Most of these tools need permissions that can only be granted through **System S
 | **1Password** | Accessibility | Privacy & Security → Accessibility | For global shortcut (Cmd+Shift+Space) and browser integration. |
 | **Claude Code** | Full Disk Access (optional) | Privacy & Security → Full Disk Access | Only if you point it at directories outside your home (Library, System). |
 
-Additional global setting:
+Additional global settings:
 
 - **System Settings → Control Center → Menu Bar Only → Automatically hide and show the menu bar → Always.** Hides the native macOS menu bar so SketchyBar is the only top bar visible. Equivalent terminal command: `defaults write NSGlobalDomain _HIHideMenuBar -bool true && killall SystemUIServer`.
+
+#### Solid menu bar when peeking — Reduce transparency
+
+With sketchybar at `y_offset=0` (flush at top), the auto-hidden macOS menu bar peeks at the same y-position as the bar. By default macOS renders the menu bar translucent, which can make the peek hard to read on top of sketchybar. Toggle on:
+
+- **System Settings → Accessibility → Display → Reduce transparency.**
+
+This makes the menu bar paint a solid background, so when it peeks it visibly covers sketchybar instead of bleeding through. Trade-off: it's a system-wide setting — Dock, sidebars, and Control Center also lose their translucency. The CLI form `defaults write com.apple.universalaccess reduceTransparency -bool true` is **TCC-blocked** on current macOS — you can't set it from the terminal, you must flip it through System Settings.
 
 ## Auto-launch apps on login (AeroSpace 0.19+)
 
@@ -211,7 +219,35 @@ Display names are matched by the exact string AeroSpace reports — check yours 
 
 **Exception — always-float apps:** System Settings, Calculator, QuickTime, Finder "Get Info" popups, and 1Password Quick Access always open as floating windows regardless of workspace. Edit the `on-window-detected` block in `aerospace.toml` to change.
 
-**Exception — always-float apps:** System Settings, Calculator, QuickTime, Finder "Get Info" popups, and 1Password Quick Access always open as floating windows regardless of workspace.
+#### Per-monitor top inset (notched vs non-notched)
+
+`aerospace.toml` sets `outer.top` per monitor — built-in MBP gets a smaller inset than externals:
+
+```toml
+outer.top = [
+  { monitor."built-in" = 56 },
+  95
+]
+```
+
+Why: sketchybar lives at `y_offset=0` on every display, but macOS reserves a small top strip on notched MacBooks even with the menu bar autohidden. So the bar visually starts ~8px lower on the built-in than on a non-notched external — meaning the **external** needs more top inset (95) to keep tiles below the bar; the built-in needs less (56). Match by `built-in` keyword, not `main` (which tracks macOS-main and flips when you change the main display).
+
+#### `aerospace-monitor-layout` truncation guard
+
+`bin/aerospace-monitor-layout` regenerates the `[workspace-to-monitor-force-assignment]` block at the bottom of `aerospace.toml` based on currently-attached displays. The script does:
+
+1. `grep -n` to find the section header line, then
+2. `head -n $((line - 1))` to keep the prefix, then
+3. Append the new block.
+
+If the section ever ends up at line 1, `head -n 0` outputs nothing and the entire file gets replaced with just the workspace block — wiping all keybindings and gap rules. The script now refuses to run when the section is at line 1 and prints a restore hint:
+
+```
+aerospace-monitor-layout: refusing to run — config appears truncated
+  Restore from git: git -C ~/.config checkout HEAD -- aerospace/aerospace.toml
+```
+
+If you ever see that message, restore from git and the script will work normally on the next run.
 
 ### Keybindings cheat sheet
 
@@ -309,9 +345,7 @@ Hot pink / hot purple theme. Shows workspaces 1–8 with themed Nerd Font icons;
 | Element | Icon | Behavior |
 |---|---|---|
 | Clock | — | Date + time. |
-| Volume | Speaker glyph | Icon-only (no % label). **Click:** opens Sound in System Settings. |
 | Battery | Battery level glyph (charging: battery+bolt) | `<icon> N%`. Level-appropriate glyph, bolt overlay when on AC power. |
-| Bluetooth | Bluetooth glyph | Icon-only (no count). **Click:** opens Bluetooth in System Settings. |
 | **ccusage** | Lightning bolt | `$cost · X% · Ym` — active 5-hour block cost, % of block consumed, minutes remaining. Green <$3/h, yellow <$8/h, red ≥$8/h. **Hover:** model, projected block total, output/cache tokens, today's total cost, block reset time. Explains that this is a 5-hour rolling rate limit (not daily or monthly). **Click:** opens Claude.app. Requires `npm install -g ccusage`. |
 | **Claude session** | Robot | `N× <project>` — shows when `claude` processes are running, with the most-recent project dir as hint. Hidden when no claude process. **Hover:** top 5 recent project dirs with mtime age. **Click:** opens Claude.app. |
 | **Opencode session** | Cyan robot | `N× <project>` — same idea as Claude session but for `opencode` procs. Hidden when no opencode process. **Hover:** top 5 recent session log dirs with mtime age. Cost data not surfaced (opencode `stats` available but too slow for 5s polling — revisit if a streaming source appears). |
@@ -319,7 +353,7 @@ Hot pink / hot purple theme. Shows workspaces 1–8 with themed Nerd Font icons;
 | **TWIN tasks** | Task list | `N open · X%` — open `- [ ]` checkbox count across `experiences/plans/*.md` with completion percentage. Green if 0 open, yellow <5, red ≥5. **Hover:** top-3 plans by open count. **Click:** opens Claude.app. |
 | **Calendar** | Calendar | `{title 4 chars}... now` if a meeting is active, or `{title 4 chars}... in Xhr Ymin` for the next meeting. Queries Calendar.app via AppleScript (skips all-day events, holidays, birthdays). **Hover:** full title + time + calendar name. **Click:** opens Google Calendar in browser. |
 | `TILES` / `H-ACC` / `V-ACC` / `FLOAT` | Layout icon | Current tiling mode. Click: toggle tiles/accordion. Small font, compact. |
-| Bar appearance | — | Dark violet bar (`$BAR_COLOR`), identical on every attached monitor (`display=all`). |
+| Bar appearance | — | Dark violet bar (`$BAR_COLOR`), `y_offset=0` (flush at the top of every display via `display=all`), height 40 + 8px margin. macOS auto-hide menu-bar peek will briefly overlap the bar — sketchybar has no menu-bar-visibility event to follow, so this is the trade-off for flush-to-top. Mitigate by enabling [Reduce transparency](#solid-menu-bar-when-peeking-reduce-transparency) so the menu bar paints solid over the bar instead of see-through. |
 
 #### Tooltip popups
 
@@ -569,7 +603,7 @@ Karabiner's hyper-key rule isn't active.
 pgrep -f karabiner_console_user_server  # should return a PID
 ```
 
-If not running, open Karabiner-Elements.app once and grant all three required permissions (Driver, Input Monitoring, Accessibility). Hit caps lock alone in any text field — it should do nothing (not toggle caps). If it toggles caps, the remap rule isn't loaded.
+If not running, open Karabiner-Elements.app once and grant all three required permissions (Driver, Input Monitoring, Accessibility). Caps lock is **dual-purpose**: hold + another key fires Hyper (cmd+ctrl+opt+shift); a clean tap (press + release with no other key) toggles Caps Lock as normal. So in a text field, tapping caps lock alone should toggle caps on/off; holding it and pressing N should move the focused window to workspace N. If neither works, the rule isn't loaded — `karabiner.json` should have `to` (Hyper) **and** `to_if_alone` (caps_lock) on the same manipulator. Reload via Karabiner-Elements menu bar icon → "Restart Karabiner-Elements".
 
 ### Env vars `$TWIN` / `$FLOWEN` are empty in a new shell
 
