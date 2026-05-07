@@ -150,40 +150,34 @@ for sid in 1 2 3 4 5 6 7 8; do
 done
 wait
 
-# Monitor count indicator — sits on the left, immediately after pill 8.
-# Plain text styling (matches the `tiles` front_app_layout pill, not the
-# big workspace-pill style). Click → hard-restart AeroSpace + reapply layout.
-sketchybar --add item monitor_layout left \
-  --set monitor_layout \
-    update_freq=30 \
-    script="$PLUGIN_DIR/monitor_layout.sh" \
-    padding_left=6 \
-    padding_right=2 \
-    icon.drawing=on \
-    icon.font="Hack Nerd Font:Regular:14.0" \
-    icon.color=$WHITE \
-    icon.padding_left=2 \
-    icon.padding_right=4 \
-    label.drawing=on \
-    label.font="SF Pro:Semibold:9.0" \
-    label.color=$WHITE \
-    label.padding_left=0 \
-    label.padding_right=4 \
-    background.drawing=on \
-    background.color=$FRONT_APP_LAYOUT_BG_COLOR \
-    background.corner_radius=4 \
-    background.height=18 \
-    popup.background.color=$ITEM_BG_COLOR \
-    popup.background.corner_radius=6 \
-    popup.background.border_color=$HOT_PURPLE \
-    popup.background.border_width=1 \
-    popup.horizontal=on \
-    popup.align=left \
-    popup.y_offset=4 \
-    click_script="$HOME/.local/bin/aerospace-monitor-layout --restart >/dev/null 2>&1; sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=\$(aerospace list-workspaces --focused); sketchybar --set monitor_layout icon.color=$HOT_PINK; sleep 0.3; sketchybar --set monitor_layout icon.color=$WHITE" \
-  --subscribe monitor_layout display_change mouse.entered mouse.exited mouse.exited.global \
-  --add item monitor_layout.tt popup.monitor_layout \
-  --set monitor_layout.tt label.font="SF Mono:Regular:11.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8
+# Tile-gap controls — adjust the AeroSpace `outer.top` for whichever monitor
+# is currently focused. Plain click = ±2px; shift+click = ±10px.
+# Uses the helper at ~/.local/bin/aerospace-tile-gap which writes the toml,
+# debounces aerospace reload-config (200ms), and clamps 0..200.
+# The vertical divider between pills 4 and 5 is the "two-monitors-attached"
+# indicator now — no separate monitor-count pill needed.
+tile_gap_common=(
+  padding_left=2
+  padding_right=2
+  icon.font="Hack Nerd Font:Bold:14.0"
+  icon.color=$WHITE
+  icon.padding_left=6
+  icon.padding_right=6
+  label.drawing=off
+  background.drawing=on
+  background.color=$FRONT_APP_LAYOUT_BG_COLOR
+  background.corner_radius=4
+  background.height=18
+)
+
+sketchybar --add item tile_gap_minus left \
+  --set tile_gap_minus "${tile_gap_common[@]}" \
+    icon="−" \
+    click_script="if [ \"\$MODIFIER\" = \"shift\" ]; then ~/.local/bin/aerospace-tile-gap -10; else ~/.local/bin/aerospace-tile-gap -2; fi >/dev/null" \
+  --add item tile_gap_plus left \
+  --set tile_gap_plus "${tile_gap_common[@]}" \
+    icon="+" \
+    click_script="if [ \"\$MODIFIER\" = \"shift\" ]; then ~/.local/bin/aerospace-tile-gap +10; else ~/.local/bin/aerospace-tile-gap +2; fi >/dev/null"
 
 
 # Wispr Flow recording indicator — pinned center, pulses when transcribing.
@@ -252,7 +246,9 @@ sketchybar --add item refresh right \
     background.drawing=off \
     padding_left=4 \
     padding_right=4 \
+    script="$PLUGIN_DIR/refresh.sh" \
     click_script="$PLUGIN_DIR/refresh.sh" \
+  --subscribe refresh display_change \
   --add item clock right \
   --set clock update_freq=10 script="$PLUGIN_DIR/clock.sh" \
     padding_left=0 padding_right=0 \

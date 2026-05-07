@@ -76,7 +76,7 @@ inner.horizontal = 8
 inner.vertical = 8
 outer.bottom = 5
 outer.top = [
-  { monitor."built-in" = 56 },
+  { monitor."built-in" = 12 },
   95
 ]
 # Per-monitor top inset (sketchybar y_offset=0, height 40, margin 8 → 48px bar).
