@@ -215,6 +215,13 @@ hash -d twin="$TWIN"
 hash -d flowen="$FLOWEN"
 hash -d dots=~/.config
 
+# ---- Flowen-os pnpm shortcuts (run from anywhere via `pnpm -C $FLOWEN`) ----
+alias flowen-web='pnpm -C $FLOWEN dev:web'         # Next.js web · localhost:3333
+alias flowen-api='pnpm -C $FLOWEN dev:server'      # Hono API server
+alias flowen-install='pnpm -C $FLOWEN install'     # Run after pull/branch-switch (pnpm-lock change)
+alias flowen-db-push='pnpm -C $FLOWEN db:push'     # Drizzle schema push
+alias flowen-db-seed='pnpm -C $FLOWEN db:seed'     # Seed dev data
+
 # Quick-edit shortcuts for this dotfiles repo
 alias zshconfig='$EDITOR ~/.config/zshrc'
 alias aeroconfig='$EDITOR ~/.config/aerospace/aerospace.toml'
