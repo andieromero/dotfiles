@@ -1,24 +1,18 @@
 #!/usr/bin/env bash
 #
 # Cycle layout modes for the focused workspace by clicking the layout pill.
-#   click          -> tiles / accordion toggle
+#   click          -> toggle floating <-> tiling for the focused window
 #   shift + click  -> toggle orientation (horizontal / vertical) within tiles
-#   alt   + click  -> toggle floating / tiling for the focused window
 #
+# Accordion mode is intentionally not exposed. Only tiles and float are used.
 # BUTTON and MODIFIER are provided by sketchybar when the click_script runs.
 
 case "${MODIFIER:-none}" in
   shift)
-    # Flip orientation within the current mode
     aerospace layout horizontal vertical
     ;;
-  alt)
-    # Yank the focused window between tiling and floating
-    aerospace layout floating tiling
-    ;;
   *)
-    # Main toggle: tiles <-> accordion
-    aerospace layout tiles accordion
+    aerospace layout floating tiling
     ;;
 esac
 

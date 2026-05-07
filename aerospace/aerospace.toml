@@ -128,24 +128,12 @@ alt-p = 'exec-and-forget open -a "Adobe Premiere Pro 2024"'
 alt-shift-r = ['exec-and-forget /opt/homebrew/bin/sketchybar --reload']
 alt-shift-m = 'exec-and-forget ~/.local/bin/aerospace-monitor-layout'  # Reconfigure monitor layout
 
-# See: https://nikitabobko.github.ioeAeroSpace/commands#layout
-alt-e = 'layout tiles horizontal vertical'
-alt-comma = 'layout accordion horizontal vertical'
-alt-f = 'fullscreen'
-alt-y = ['focus right', 'join-with down', 'layout tiles horizontal']
-
-# ---- cmd-prefixed layout toggles (consistent with cmd+1..8 workspace flow) ----
-cmd-backslash   = 'layout tiles horizontal vertical'      # tiles H <-> V
-cmd-slash       = 'layout accordion horizontal vertical'  # accordion H <-> V
-cmd-period      = 'layout tiles accordion'                # tiles <-> accordion
+# ---- cmd-prefixed layout toggles ----
+# Only tiles + float. Accordion mode removed — never used in this setup.
+cmd-backslash   = 'layout tiles horizontal vertical'      # tiles H <-> V (orientation flip)
 cmd-0           = 'fullscreen'                            # fullscreen toggle
 cmd-quote       = 'layout floating tiling'                # float <-> tile
 cmd-shift-w     = 'close'                                 # close focused window
-# See: https://nikitabobko.github.io/AeroSpace/commands#focus
-alt-h = 'focus left'
-alt-j = 'focus down'
-alt-k = 'focus up'
-alt-l = 'focus right'
 
 # Arrow-key focus — cmd + arrow cycles through windows directionally AND
 # crosses monitor boundaries so you can sweep across every visible window

@@ -9,7 +9,7 @@ This repo serves two audiences. Skim the column that matches you.
 | Section / Feature | 🛠 Flowen OS contributor (forking + extending) | 👤 Flowen OS user (wants the experience) |
 |---|---|---|
 | Full bootstrap (Homebrew + Brewfile + symlinks) | **Required** | **Required** |
-| AeroSpace + SketchyBar + JankyBorders + Karabiner | **Required** — this is the WM foundation | **Required** |
+| AeroSpace + SketchyBar + JankyBorders + Karabiner | **Required** — this is the WM foundation. Karabiner-Elements is installed but `karabiner.json` ships with no rules; install it for the driver-level keyboard support and add your own remaps if you want them. | **Required** |
 | Ghostty + tmux + zsh + Starship | **Required** | **Recommended** (any terminal works, but shell aliases expect zsh) |
 | Flowen / TWIN OS pills (`ccusage`, `claude_session`, `opencode_session`, `brain_freshness`, `twin_tasks`, `wispr`) | **Core** — edit the plugin scripts | **Core** — the reason this repo exists for you |
 | `ccusage` via `npm i -g ccusage` | Required | Required (only if using Claude Code) |
@@ -17,7 +17,7 @@ This repo serves two audiences. Skim the column that matches you.
 | `wispr-flow` cask + Login Item | Recommended | Required for voice-to-text pill |
 | `ical-buddy` + Calendar permission | Recommended | Recommended (next-event pill) |
 | Custom plugins under `sketchybar/plugins/` | **Edit freely** | Treat as black boxes, don't modify |
-| Aerospace keybindings (`cmd-N`, `cmd-arrows`, hyper-key moves) | Learn and rebind freely | Learn the cheat sheet — don't rebind, workflow assumes defaults |
+| Aerospace keybindings (`cmd-N`, `cmd-arrows`, `ctrl-cmd-N` to move) | Learn and rebind freely | Learn the cheat sheet — don't rebind, workflow assumes defaults |
 | Borders `com.user.borders.plist` LaunchAgent | Edit width/colors to taste | Install as-is |
 | Workspace 1-8 layout + auto-route rules | Understand + customize | Accept as-is; apps land where you open them |
 | Git history / commit conventions | Follow conventions when contributing back | Not relevant |
@@ -32,8 +32,7 @@ A keyboard-first workflow on macOS that:
 
 - **Replaces manual window arrangement with tiling** via AeroSpace (like i3 on Linux), so windows auto-arrange and you never drag or resize.
 - **Turns the top bar into an information dashboard** via SketchyBar — workspace overview, notifications, calendar, system state — instead of macOS's static menu bar.
-- **Keeps every shortcut on the left hand** around `cmd`: `cmd-N` for workspaces, `cmd-arrow` for focus, `cmd-\` for layout toggles, so window management never requires reaching.
-- **Moves windows with a hyper key** (caps lock remapped via Karabiner) to avoid conflicting with app-level `cmd-shift` shortcuts.
+- **Keeps every shortcut on the left hand** around `cmd`: `cmd-N` for workspaces, `cmd-arrow` for focus, `ctrl-cmd-N` to send the focused window to a workspace.
 - **Persists shell sessions across crashes and reboots** via tmux, auto-attached on every Ghostty launch.
 - **Makes repos one-command reachable** via env vars (`$TWIN`, `$FLOWEN`), named directory hashes (`cd ~twin`), and interactive helpers that set tab titles.
 - **Is fully reproducible** — every dependency declared in the Brewfile, every config in this repo, bootstraps a fresh Mac to this exact state in < 10 minutes.
@@ -69,7 +68,7 @@ Intel Macs will technically work but paths in `zshrc` point to `/opt/homebrew`; 
 | `sketchybar/` | [SketchyBar](https://github.com/FelixKratz/SketchyBar) — custom top bar (hot pink/purple theme) |
 | `borders/bordersrc` | [JankyBorders](https://github.com/FelixKratz/JankyBorders) — active window borders |
 | `ghostty/config` | [Ghostty](https://ghostty.org) terminal (opens to `$TWIN` by default) |
-| `karabiner/karabiner.json` | [Karabiner-Elements](https://karabiner-elements.pqrs.org) keyboard remapping (caps lock → hyper) |
+| `karabiner/karabiner.json` | [Karabiner-Elements](https://karabiner-elements.pqrs.org) keyboard remapping (currently empty — caps lock acts as native caps lock) |
 | `tmux/tmux.conf` | [tmux](https://github.com/tmux/tmux) terminal multiplexer (prefix `Ctrl+a`) |
 | `starship.toml` | [Starship](https://starship.rs) prompt |
 | `zshrc` | zsh shell config (symlinked to `~/.zshrc`) |
@@ -185,9 +184,9 @@ On next login AeroSpace's `on-window-detected` rules route each window to its de
 
 ### How it works at a glance
 
-- **9 workspaces** (like Linux i3). Only 1-8 show up in SketchyBar; workspace 9 is a hidden scratch area you reach only via `cmd-9`.
+- **8 workspaces** (like Linux i3), all surfaced as pills in SketchyBar.
 - Workspaces are **split across two physical monitors** when docked, but **collapse onto whichever monitor is attached** when you're on the go. The layout self-heals — no reconfiguration when you unplug the external displays.
-- **No per-app auto-routing.** A new Slack window doesn't teleport to "the chat workspace." It opens on whichever workspace you're looking at, tiles with the focused container, and you move it later with the hyper key if you want.
+- **No per-app auto-routing.** A new Slack window doesn't teleport to "the chat workspace." It opens on whichever workspace you're looking at, tiles with the focused container, and you move it later with `ctrl-cmd-N` if you want.
 - The bar's app-icon strip on each pill tells you at a glance **which apps live on which workspace right now** — no mental bookkeeping.
 
 ### Main display vs secondary display
@@ -211,11 +210,10 @@ Display names are matched by the exact string AeroSpace reports — check yours 
 | 6 | Main (HP E27 G5) | Main (laptop) | Code (Windsurf / Cursor) |
 | 7 | Main (HP E27 G5) | Main (laptop) | Browser (Chrome primary) |
 | 8 | Main (HP E27 G5) | Main (laptop) | Inbox / overflow |
-| 9 | Secondary (USB C2) — hidden from bar | Main (laptop) — hidden from bar | Scratch / experimental |
 
 **Key insight:** the monitor pins are by **display name**, not by macOS's main-display flag. So even if macOS thinks your laptop is the main display, AeroSpace still sends workspaces 5-8 to the HP E27 G5 when it's attached. Plug or unplug monitors and windows flow to the correct place without reconfiguration.
 
-**When only one display is attached** (laptop on the go, or a single external), every workspace collapses to the one available screen. All 9 fit on the one monitor — use `cmd-1..9` to cycle between them as usual.
+**When only one display is attached** (laptop on the go, or a single external), every workspace collapses to the one available screen. All 8 fit on the one monitor — use `cmd-1..8` to cycle between them.
 
 **Exception — always-float apps:** System Settings, Calculator, QuickTime, Finder "Get Info" popups, and 1Password Quick Access always open as floating windows regardless of workspace. Edit the `on-window-detected` block in `aerospace.toml` to change.
 
@@ -257,8 +255,8 @@ All keybindings unify around `cmd` for window management so the whole flow is on
 
 | Keys | Action |
 |---|---|
-| `cmd-1..9` | Switch to workspace N |
-| `caps-1..9` (hyper) | Move focused window to workspace N |
+| `cmd-1..8` | Switch to workspace N |
+| `ctrl-cmd-1..8` | Move focused window to workspace N |
 | `alt-tab` | Toggle last two workspaces |
 | `alt-shift-tab` | Move current workspace to the other monitor |
 
@@ -267,7 +265,6 @@ All keybindings unify around `cmd` for window management so the whole flow is on
 | Keys | Action |
 |---|---|
 | `cmd-←/↓/↑/→` | Focus window directionally, wrapping across monitors |
-| `alt-h/j/k/l` | Same, vim-style (backup) |
 
 **Swap windows within a workspace**
 
@@ -276,19 +273,16 @@ All keybindings unify around `cmd` for window management so the whole flow is on
 | `alt-shift-h/j/k/l` | Swap focused window with neighbor |
 | `alt-shift-minus / equal` | Resize focused window smaller / larger |
 
-**Layout toggles**
+**Layout toggles** — only tiles + float (accordion mode is intentionally unbound)
 
 | Keys | Action |
 |---|---|
-| `cmd-\` | Tiles orientation: horizontal ↔ vertical |
-| `cmd-/` | Accordion orientation: horizontal ↔ vertical |
-| `cmd-.` | Tiles ↔ accordion |
-| `cmd-0` | Fullscreen toggle |
+| `cmd-\` | Tile orientation: horizontal ↔ vertical |
 | `cmd-'` | Float ↔ tile toggle |
+| `cmd-0` | Fullscreen toggle |
 | `cmd-shift-w` | Close focused window |
 | `cmd-w` | Close tab/window (app-level, native macOS) |
 | `cmd-q` | Quit app entirely |
-| `alt-e` / `alt-,` / `alt-f` | Same toggles, alt-prefixed backups |
 
 **App launchers**
 
@@ -321,7 +315,7 @@ These cmd combos are intercepted globally, which means they no longer work insid
 
 | Combo | What you lose |
 |---|---|
-| `cmd-1..9` | App tab-switching (Ghostty / Chrome / Windsurf / Finder view modes) |
+| `cmd-1..8` | App tab-switching (Ghostty / Chrome / Windsurf / Finder view modes) |
 | `cmd-←/→` | Text nav to start/end of line (use Home/End or `opt-←/→` for word nav) |
 | `cmd-↑/↓` | Text nav to top/bottom of document (use `fn-↑/↓`) |
 
@@ -329,7 +323,7 @@ These cmd combos are intercepted globally, which means they no longer work insid
 
 ### Sketchybar cheat sheet
 
-Hot pink / hot purple theme. Shows workspaces 1–8 with themed Nerd Font icons; workspace 9 is hidden (reachable only via `cmd-9`). All pills share the same soft-pink background (`$ITEM_BG_COLOR`); the single keyboard-focused workspace turns hot pink.
+Hot pink / hot purple theme. Shows workspaces 1–8 with themed Nerd Font icons. All pills share the same soft-pink background (`$ITEM_BG_COLOR`); the single keyboard-focused workspace turns hot pink.
 
 #### Left-side pills
 
@@ -352,7 +346,7 @@ Hot pink / hot purple theme. Shows workspaces 1–8 with themed Nerd Font icons;
 | **Brain freshness** | Brain | `<Name> twins Nm/Nh/Nd` — age of `brain-health/progress.md`. Dynamic name derived from `~/Flowen/twin-<name>/` directory. Green <6h, yellow <24h, red ≥24h. **Hover:** exact timestamp + first section heading. **Click:** opens Claude.app. |
 | **TWIN tasks** | Task list | `N open · X%` — open `- [ ]` checkbox count across `experiences/plans/*.md` with completion percentage. Green if 0 open, yellow <5, red ≥5. **Hover:** top-3 plans by open count. **Click:** opens Claude.app. |
 | **Calendar** | Calendar | `{title 4 chars}... now` if a meeting is active, or `{title 4 chars}... in Xhr Ymin` for the next meeting. Queries Calendar.app via AppleScript (skips all-day events, holidays, birthdays). **Hover:** full title + time + calendar name. **Click:** opens Google Calendar in browser. |
-| `TILES` / `H-ACC` / `V-ACC` / `FLOAT` | Layout icon | Current tiling mode. Click: toggle tiles/accordion. Small font, compact. |
+| `TILES` / `FLOAT` | Layout icon | Current layout mode of the focused window. **Click:** toggle floating ↔ tiling. **Shift+click:** flip tile orientation horizontal ↔ vertical. Accordion mode is not exposed. Small font, compact. |
 | Bar appearance | — | Dark violet bar (`$BAR_COLOR`), `y_offset=0` (flush at the top of every display via `display=all`), height 40 + 8px margin. macOS auto-hide menu-bar peek will briefly overlap the bar — sketchybar has no menu-bar-visibility event to follow, so this is the trade-off for flush-to-top. Mitigate by enabling [Reduce transparency](#solid-menu-bar-when-peeking-reduce-transparency) so the menu bar paints solid over the bar instead of see-through. |
 
 #### Tooltip popups
@@ -383,7 +377,7 @@ Since there's no per-app auto-routing, windows stay where you put them. If a wor
 Full reset of every workspace (run in Ghostty):
 
 ```bash
-for ws in 1 2 3 4 5 6 7 8 9; do
+for ws in 1 2 3 4 5 6 7 8; do
   aerospace workspace $ws
   aerospace layout tiles
   aerospace flatten-workspace-tree
@@ -496,7 +490,7 @@ This is a deliberate tradeoff: native tabs give you the nicer macOS UI (Cmd+Shif
 
 **Option C — Move the second tab to a different workspace:**
 
-- Focus the new Ghostty window → `caps+<N>` (hyper-key, N = 1..9) sends it to workspace N. Your original workspace returns to the pre-split tile.
+- Focus the new Ghostty window → `ctrl-cmd-<N>` (N = 1..8) sends it to workspace N. Your original workspace returns to the pre-split tile.
 
 **Option D — Cycle existing tabs without Cmd+T (no split at all):**
 
@@ -585,7 +579,7 @@ brew services restart sketchybar
 
 Known tradeoff — Ghostty's native macOS tabs register as separate windows. See [Ghostty tabs ↔ AeroSpace interaction](#ghostty-tabs-↔-aerospace-interaction) for reclaim flow. If the split bothers you, swap `macos-titlebar-style = native` → `macos-titlebar-style = tabs` in `ghostty/config` and restart Ghostty.
 
-### `cmd+1..9` or `cmd+arrow` doesn't switch workspaces
+### `cmd+1..8` or `cmd+arrow` doesn't switch workspaces
 
 AeroSpace isn't running or lost accessibility permission. Check:
 
@@ -595,15 +589,21 @@ pgrep -x AeroSpace || open -a AeroSpace
 
 If running: System Settings → Privacy & Security → Accessibility → ensure AeroSpace is enabled. Toggle off/on to reset.
 
-### `caps+N` (hyper) doesn't move windows
+### Caps Lock isn't toggling caps
 
-Karabiner's hyper-key rule isn't active.
+Karabiner-Elements may have a leftover remap. Check the rule list:
+
+```bash
+jq '.profiles[].complex_modifications.rules' ~/.config/karabiner/karabiner.json
+```
+
+This setup ships with `complex_modifications.rules: []` — caps lock is **just caps lock**, no Hyper, no remaps. If the array contains rules and caps lock is misbehaving, those rules are interfering. Either remove them by hand, restore the empty array (`{ "rules": [] }`), or delete + restart Karabiner-Elements.
+
+If the file is empty/missing, open Karabiner-Elements.app once and grant all three required permissions (Driver, Input Monitoring, Accessibility). The driver-level service must be running for any keystroke to pass through Karabiner's pipeline:
 
 ```bash
 pgrep -f karabiner_console_user_server  # should return a PID
 ```
-
-If not running, open Karabiner-Elements.app once and grant all three required permissions (Driver, Input Monitoring, Accessibility). Caps lock is **dual-purpose**: hold + another key fires Hyper (cmd+ctrl+opt+shift); a clean tap (press + release with no other key) toggles Caps Lock as normal. So in a text field, tapping caps lock alone should toggle caps on/off; holding it and pressing N should move the focused window to workspace N. If neither works, the rule isn't loaded — `karabiner.json` should have `to` (Hyper) **and** `to_if_alone` (caps_lock) on the same manipulator. Reload via Karabiner-Elements menu bar icon → "Restart Karabiner-Elements".
 
 ### Env vars `$TWIN` / `$FLOWEN` are empty in a new shell
 
@@ -748,7 +748,7 @@ A keyboard-first, tiling-window macOS setup with a dashboard-style top bar that 
 
 1. Run the [Bootstrapping steps](#bootstrapping-a-fresh-machine) (10 min).
 2. Grant every permission in [macOS permissions per app](#macos-permissions-per-app) — including **Wispr Flow (3 permissions + inner helper)**, **sketchybar + icalBuddy for Calendars**, and **borders for Screen Recording**. Skip these and pills silently no-op / borders won't draw.
-3. Skim the [Keybindings cheat sheet](#keybindings-cheat-sheet). Left hand on `cmd`, workspace moves with caps-lock hyper.
+3. Skim the [Keybindings cheat sheet](#keybindings-cheat-sheet). Left hand on `cmd` for everything: `cmd-N` to switch workspace, `ctrl-cmd-N` to move the focused window to a workspace, `cmd-arrow` to focus.
 4. Glance at [TWIN OS / Flowen pills](#twin-os--flowen-pills) to understand the right-side pills on the top bar.
 5. You're done. Don't edit plugin scripts unless you want to extend them.
 

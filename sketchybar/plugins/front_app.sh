@@ -9,15 +9,13 @@
 # front_app_layout item (shows current AeroSpace layout mode).
 
 # Return the icon + human-readable name for the focused window's layout.
+# Only TILES / FLOAT are first-class; accordion isn't bound in this setup.
 get_layout_info() {
   LAYOUT=$(aerospace list-windows --focused --format '%{window-layout}' 2>/dev/null)
   case "$LAYOUT" in
-    h_accordion) echo " H-ACC" ;;
-    v_accordion) echo " V-ACC" ;;
-    h_tiles)     echo " TILES" ;;
-    v_tiles)     echo " TILES" ;;
-    floating)    echo "󰉈 FLOAT" ;;
-    *)           echo " —" ;;
+    h_tiles|v_tiles)         echo " TILES" ;;
+    floating)                echo "󰉈 FLOAT" ;;
+    *)                        echo " —" ;;
   esac
 }
 
