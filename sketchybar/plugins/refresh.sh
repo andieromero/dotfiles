@@ -62,11 +62,12 @@ for sid in 1 2 3 4 5 6 7 8; do
   fi
 done
 
-# Trigger the aerospace event so each pill's script runs (updates active state + notification border)
+# Trigger the aerospace event so each pill's script runs (updates active state + notification border).
+# DO NOT call `sketchybar --update` here — it re-fires every item with `script=`,
+# which would loop right back through this script via the hotplug_listener
+# (subscribed to display_change with the same script). The aerospace_workspace_change
+# trigger above is sufficient to refresh the workspace pills.
 sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE="$(aerospace list-workspaces --focused)"
-
-# Nudge every status item on the right side to refresh
-sketchybar --update
 
 # Restore the refresh button styling after a beat
 sleep 0.25
