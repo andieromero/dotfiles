@@ -77,6 +77,17 @@ Intel Macs will technically work but paths in `zshrc` point to `/opt/homebrew`; 
 
 ## Bootstrapping a fresh machine
 
+> **⚠ Order matters — Brewfile FIRST, services and LaunchAgents LATER.**
+>
+> Several files in this repo expect tools that arrive via the Brewfile (`tmux`, `fzf`, `sketchybar`, `borders`, `icalBuddy`, `ccusage`, etc.). If you start the services or install the LaunchAgents *before* those tools exist, macOS will repeatedly try to spawn missing binaries and you can hit the per-user fork limit. The visible symptom is `login: fork: resource temporarily unavailable` when opening a new terminal — recovery requires reboot or force-quitting runaway processes via Activity Monitor.
+>
+> Specifically, **do not** do any of these until you've reached step 5 below:
+> - `brew services start sketchybar` / `brew services start borders`
+> - `cp ~/.config/borders/com.user.borders.plist ~/Library/LaunchAgents/`
+> - Use the Ghostty session picker (`command = ~/.local/bin/ghostty-session-picker` in `ghostty/config`)
+>
+> Follow the numbered steps in order — each one assumes the previous step's deps are already present.
+
 The `Brewfile` is the single source of truth for every CLI, GUI app, cask, and tap this setup depends on. To rebuild from scratch:
 
 ```bash
