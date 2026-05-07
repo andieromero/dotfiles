@@ -15,15 +15,15 @@ source "$CONFIG_DIR/colors.sh" # Loads all defined colors
 # https://felixkratz.github.io/SketchyBar/config/tricks#color-picker
 
 sketchybar --bar position=top height=40 corner_radius=30 color=$BAR_COLOR \
-                 y_offset=30 \
+                 y_offset=0 \
                  margin=8 \
                  topmost=window \
                  sticky=on \
                  display=all \
                  padding_left=10 padding_right=10
-# y_offset=30 clears the MacBook camera/notch area when running on the built-in
-# display only. Costs ~25px on external displays but that's the tradeoff for
-# notch-safety. Aerospace gaps below need to match (see aerospace.toml outer.top).
+# y_offset=0: flush at the top of every display. macOS auto-hide menu bar peek
+# will briefly overlap the bar — sketchybar has no menu-bar-visibility event to
+# track. Aerospace outer.top must match (bar height 40 + margin 8 = 48).
 
 ##### Changing Defaults #####
 # We now change some default values, which are applied to all further items.
@@ -257,21 +257,11 @@ sketchybar --add item refresh right \
   --set clock update_freq=10 script="$PLUGIN_DIR/clock.sh" \
     padding_left=0 padding_right=0 \
     label.padding_left=0 label.padding_right=2 \
-  --add item volume right \
-  --set volume script="$PLUGIN_DIR/volume.sh" \
-    padding_left=0 padding_right=0 \
-    icon.padding_left=2 icon.padding_right=2 \
-    click_script="open /System/Library/PreferencePanes/Sound.prefPane" \
-  --subscribe volume volume_change \
   --add item battery right \
   --set battery update_freq=120 script="$PLUGIN_DIR/battery.sh" \
     icon.padding_left=4 icon.padding_right=2 \
     label.padding_left=0 label.padding_right=2 \
   --subscribe battery system_woke power_source_change \
-  --add item bluetooth right \
-  --set bluetooth update_freq=30 script="$PLUGIN_DIR/bluetooth.sh" \
-    click_script="open /System/Library/PreferencePanes/Bluetooth.prefPane" \
-  --subscribe bluetooth system_woke \
   --add item claude_context right \
   --set claude_context \
     update_freq=10 \
@@ -403,40 +393,6 @@ sketchybar --add item refresh right \
   --subscribe twin_tasks mouse.entered mouse.exited mouse.exited.global \
   --add item twin_tasks.tt popup.twin_tasks \
   --set twin_tasks.tt label.font="SF Mono:Regular:11.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
-  --add item flowen_cheatsheet right \
-  --set flowen_cheatsheet \
-    update_freq=0 \
-    script="$PLUGIN_DIR/flowen_cheatsheet.sh" \
-    icon.font="Hack Nerd Font:Bold:14.0" \
-    label.font="SF Pro:Semibold:12.0" \
-    label.color=$WHITE \
-    background.drawing=on \
-    background.color=$ITEM_BG_COLOR \
-    background.corner_radius=6 \
-    background.height=22 \
-    popup.background.color=$ITEM_BG_COLOR \
-    popup.background.corner_radius=6 \
-    popup.background.border_color=$HOT_PURPLE \
-    popup.background.border_width=1 \
-    popup.horizontal=off \
-    popup.align=right \
-    popup.y_offset=4 \
-    click_script="open -a Claude" \
-  --subscribe flowen_cheatsheet mouse.entered mouse.exited mouse.exited.global \
-  --add item flowen_cheatsheet.tt1 popup.flowen_cheatsheet \
-  --set flowen_cheatsheet.tt1 label.font="SF Mono:Regular:10.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 label.padding_top=4 \
-  --add item flowen_cheatsheet.tt2 popup.flowen_cheatsheet \
-  --set flowen_cheatsheet.tt2 label.font="SF Mono:Regular:10.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
-  --add item flowen_cheatsheet.tt3 popup.flowen_cheatsheet \
-  --set flowen_cheatsheet.tt3 label.font="SF Mono:Regular:10.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
-  --add item flowen_cheatsheet.tt4 popup.flowen_cheatsheet \
-  --set flowen_cheatsheet.tt4 label.font="SF Mono:Regular:10.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
-  --add item flowen_cheatsheet.tt5 popup.flowen_cheatsheet \
-  --set flowen_cheatsheet.tt5 label.font="SF Mono:Regular:10.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
-  --add item flowen_cheatsheet.tt6 popup.flowen_cheatsheet \
-  --set flowen_cheatsheet.tt6 label.font="SF Mono:Regular:10.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
-  --add item flowen_cheatsheet.tt7 popup.flowen_cheatsheet \
-  --set flowen_cheatsheet.tt7 label.font="SF Mono:Regular:10.0" label.color=$WHITE icon.drawing=off label.padding_left=8 label.padding_right=8 \
   --add item ci_status right \
   --set ci_status \
     update_freq=60 \

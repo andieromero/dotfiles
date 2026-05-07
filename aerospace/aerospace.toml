@@ -76,10 +76,14 @@ inner.horizontal = 8
 inner.vertical = 8
 outer.bottom = 5
 outer.top = [
-  { monitor."built-in" = 80 },
-  { monitor."main" = 80 },
-  80
+  { monitor."built-in" = 56 },
+  95
 ]
+# Per-monitor top inset (sketchybar y_offset=0, height 40, margin 8 → 48px bar).
+# - built-in: 56. Notched MacBook reserves a top strip even with menu bar
+#   autohidden, so the bar visually starts ~8px lower; 56 = small breathing.
+# - external (fallback 95): no notch reservation, bar at true y=0; needs ~45px
+#   more explicit gap to keep tiles below the bar.
 outer.left = 5
 outer.right = 5
 
@@ -246,10 +250,10 @@ if.window-title-regex-substring = 'Quick Access'
 run = ['layout floating']
 
 [workspace-to-monitor-force-assignment]
-1 = ['Studio Display', 'main']
-2 = ['Studio Display', 'main']
-3 = ['Studio Display', 'main']
-4 = ['Studio Display', 'main']
+1 = ['secondary', 'main']
+2 = ['secondary', 'main']
+3 = ['secondary', 'main']
+4 = ['secondary', 'main']
 5 = 'main'
 6 = 'main'
 7 = 'main'

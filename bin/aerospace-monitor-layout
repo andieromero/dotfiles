@@ -114,6 +114,16 @@ if grep -q '^\[workspace-to-monitor-force-assignment\]' "$AEROSPACE_CONFIG"; the
   # Find the line number of the section header
   section_line=$(grep -n '^\[workspace-to-monitor-force-assignment\]' "$AEROSPACE_CONFIG" | head -1 | cut -d: -f1)
 
+  # Guard: if the section is at line 1, the file has already been truncated
+  # to just this block (likely by a previous buggy run). Refuse to overwrite —
+  # the caller must restore the full config first.
+  if (( section_line <= 1 )); then
+    echo "aerospace-monitor-layout: refusing to run — config appears truncated" >&2
+    echo "  ($AEROSPACE_CONFIG starts with [workspace-to-monitor-force-assignment])" >&2
+    echo "  Restore from git: git -C ~/.config checkout HEAD -- aerospace/aerospace.toml" >&2
+    exit 1
+  fi
+
   # Keep everything before the section header, append new block
   head -n $((section_line - 1)) "$AEROSPACE_CONFIG" > "${AEROSPACE_CONFIG}.tmp"
   echo "$new_block" >> "${AEROSPACE_CONFIG}.tmp"
