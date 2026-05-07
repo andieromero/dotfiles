@@ -188,19 +188,23 @@ set_term_title() {
   export DISABLE_AUTO_TITLE="true"
 }
 
-twin-andie() {
+# cd-* helpers — `flowen` and `twin` are reserved for binaries (e.g. flowen CLI v0.1).
+# Use cd-twin / cd-flowen / cd-flowen-os to navigate.
+cd-twin() {
   cd "$TWIN" || return
   set_term_title "Andie's TWIN"
 }
 
-flowen-os() {
+cd-flowen() {
+  cd "$HOME/Flowen" || return
+  set_term_title "Flowen"
+}
+
+cd-flowen-os() {
   cd "$FLOWEN" || return
   set_term_title "flowen-os"
 }
 
-# Short aliases
-alias twin='twin-andie'
-alias flowen='flowen-os'
 alias wind='windsurf'     # Open files/directories in Windsurf: `wind .` or `wind path/to/file`
 
 # Use Windsurf as the default editor for commands like `git commit`, `crontab -e`, etc.
