@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Block commits that silently delete a large fraction of a tracked file.
+#
+# Why: 2026-05-11 — aerospace.toml in this repo got truncated from 249 → 11 lines
+# on a new laptop. The truncation was committable, made it onto main once before,
+# and broke every cmd-* keybind. Loud accident, silent commit.
+#
+# This hook compares each modified file's HEAD line count vs its staged version.
+# If a file shrinks by >= THRESHOLD percent AND was non-trivial (>= MIN_LINES),
+# the commit is blocked. Bypass intentionally with: git commit --no-verify
+#
+# Scope: modifications only. Outright deletions (--diff-filter=D) and additions
+# are user-intent-explicit; git status surfaces them. The risk class this guards
+# is "edit that looks normal but isn't."
+
+set -euo pipefail
+
+THRESHOLD=30   # percent shrink that trips the guard
+MIN_LINES=20   # ignore files smaller than this in HEAD (noise floor)
+
+bad=0
+while IFS= read -r f; do
+  [[ -z "$f" ]] && continue
+
+  old=$(git show "HEAD:$f" 2>/dev/null | wc -l | tr -d ' ')
+  new=$(git show ":$f"     2>/dev/null | wc -l | tr -d ' ')
+
+  if (( old < MIN_LINES )); then continue; fi
+  if (( new >= old )); then continue; fi
+
+  shrink=$(( (old - new) * 100 / old ))
+  if (( shrink >= THRESHOLD )); then
+    printf 'pre-commit: %s shrinks by %d%% (%d -> %d lines)\n' "$f" "$shrink" "$old" "$new" >&2
+    bad=1
+  fi
+done < <(git diff --cached --name-only --diff-filter=M)
+
+if (( bad )); then
+  cat >&2 <<'EOF'
+
+Blocked: one or more files lose a large chunk of content vs HEAD.
+This guard exists because a silent truncation hit aerospace.toml once
+and broke every cmd-* keybind across the system.
+
+If the shrink is intentional (e.g. genuine refactor / file split):
+  git commit --no-verify
+
+Otherwise re-check your working tree — you may be about to commit a wipeout.
+EOF
+  exit 1
+fi
+exit 0
