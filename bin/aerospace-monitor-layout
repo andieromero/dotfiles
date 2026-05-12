@@ -107,9 +107,37 @@ if $DRY_RUN; then
   exit 0
 fi
 
-# --- Replace the block in the config file ---
-# Remove everything from [workspace-to-monitor-force-assignment] to EOF (it's the last section)
-# and append the new block.
+# --- Replace the block in the config file (serialized via mkdir-lock) ---
+# Remove everything from [workspace-to-monitor-force-assignment] to EOF (it's
+# the last section) and append the new block.
+#
+# `display_change` fires multiple times for one physical hotplug, so this
+# script can be invoked 2-3× in a few hundred ms. Without serialization,
+# the read/head/write cycle races: one run's head can read a half-written
+# file from another run's mv, yielding 0 head lines + 9-line block + blank =
+# the 10-line truncated file we keep hitting on monitor plug-in.
+#
+# `flock(1)` isn't on macOS by default. mkdir is atomic (POSIX-guaranteed)
+# and serves as a portable critical-section gate. First runner wins, others
+# wait up to 5s and no-op — the winning runner's output is already correct
+# for the current monitor state, so re-running adds no information.
+LOCK_DIR="/tmp/aerospace-monitor-layout.lock.d"
+acquire_lock() {
+  local tries=50
+  while (( tries-- > 0 )); do
+    if mkdir "$LOCK_DIR" 2>/dev/null; then
+      trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
+      return 0
+    fi
+    sleep 0.1
+  done
+  return 1
+}
+if ! acquire_lock; then
+  echo "aerospace-monitor-layout: another run holds the lock; no-op" >&2
+  exit 0
+fi
+
 if grep -q '^\[workspace-to-monitor-force-assignment\]' "$AEROSPACE_CONFIG"; then
   # Find the line number of the section header
   section_line=$(grep -n '^\[workspace-to-monitor-force-assignment\]' "$AEROSPACE_CONFIG" | head -1 | cut -d: -f1)
@@ -124,8 +152,18 @@ if grep -q '^\[workspace-to-monitor-force-assignment\]' "$AEROSPACE_CONFIG"; the
     exit 1
   fi
 
+  # Sanity guard: if head reads back fewer lines than expected, the file is
+  # mid-write from a racing peer (mkdir-lock should prevent this — this is
+  # defense-in-depth). Refuse rather than splice garbage.
+  expected=$((section_line - 1))
+  head_lines=$(head -n "$expected" "$AEROSPACE_CONFIG" | wc -l | tr -d ' ')
+  if (( head_lines < expected )); then
+    echo "aerospace-monitor-layout: head read returned $head_lines / expected $expected — file inconsistent, refusing" >&2
+    exit 1
+  fi
+
   # Keep everything before the section header, append new block
-  head -n $((section_line - 1)) "$AEROSPACE_CONFIG" > "${AEROSPACE_CONFIG}.tmp"
+  head -n "$expected" "$AEROSPACE_CONFIG" > "${AEROSPACE_CONFIG}.tmp"
   echo "$new_block" >> "${AEROSPACE_CONFIG}.tmp"
   echo "" >> "${AEROSPACE_CONFIG}.tmp"
   mv "${AEROSPACE_CONFIG}.tmp" "$AEROSPACE_CONFIG"

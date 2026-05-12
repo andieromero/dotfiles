@@ -24,6 +24,8 @@ brew "thefuck"                 # Command correction
 brew "tmux"                    # Terminal multiplexer
 brew "ical-buddy"              # Query macOS Calendar from the CLI (sketchybar calendar pill)
 brew "blueutil"                # CLI bluetooth control (sketchybar bluetooth pill)
+brew "fswatch"                 # File-system watcher (aerospace-toml tripwire)
+brew "shellcheck"              # Shell-script linter (dotfiles-doctor static tests)
 
 # ---- Window manager / bar / borders ----
 cask "nikitabobko/tap/aerospace"       # i3-like tiling WM for macOS

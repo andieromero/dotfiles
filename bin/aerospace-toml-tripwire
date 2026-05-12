@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# aerospace-toml-tripwire: Forensic watcher for ~/.config/aerospace/aerospace.toml.
+#
+# Why: aerospace.toml has been silently truncated multiple times during monitor
+# hotplug (2026-05-06, 2026-05-11, 2026-05-12). The pre-commit shrink-guard only
+# catches truncations that get committed; this tripwire catches truncations as
+# they happen at runtime, so we can identify the writer.
+#
+# How: fswatch fires on every Updated/Created/Renamed event on the file.
+# On each event, append a forensic block to ~/.local/state/aerospace-toml-writes.log
+# capturing:
+#   - timestamp
+#   - new line count + size + mtime
+#   - lsof on the file (catches writers still holding the fd)
+#   - ps snapshot of aerospace/sketchybar/claude/script processes (likely suspects)
+#   - git status + brief diff against HEAD (so we can see what changed)
+#   - last 5 file modifications anywhere in ~/.config (correlate with other edits)
+#
+# Run via launchd: ~/Library/LaunchAgents/com.andie.aerospace-toml-tripwire.plist
+# Read the log: tail -f ~/.local/state/aerospace-toml-writes.log
+
+set -uo pipefail
+
+WATCH_FILE="${WATCH_FILE:-$HOME/.config/aerospace/aerospace.toml}"
+LOG_FILE="${LOG_FILE:-$HOME/.local/state/aerospace-toml-writes.log}"
+MAX_LOG_BYTES=$((1024 * 1024)) # 1 MB before rotation
+LOG_DIR="$(dirname "$LOG_FILE")"
+mkdir -p "$LOG_DIR"
+
+# Resolve absolute fswatch path so launchd doesn't depend on PATH.
+FSWATCH="$(command -v fswatch 2>/dev/null || echo /opt/homebrew/bin/fswatch)"
+if [[ ! -x "$FSWATCH" ]]; then
+  echo "aerospace-toml-tripwire: fswatch not found at $FSWATCH" >&2
+  exit 1
+fi
+
+rotate_if_needed() {
+  if [[ -f "$LOG_FILE" ]]; then
+    local sz
+    sz=$(stat -f '%z' "$LOG_FILE" 2>/dev/null || echo 0)
+    if (( sz > MAX_LOG_BYTES )); then
+      mv "$LOG_FILE" "${LOG_FILE}.1"
+    fi
+  fi
+}
+
+record_event() {
+  local ts line_count size mtime
+  ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  if [[ -f "$WATCH_FILE" ]]; then
+    line_count=$(wc -l < "$WATCH_FILE" | tr -d ' ')
+    size=$(stat -f '%z' "$WATCH_FILE")
+    mtime=$(stat -f '%Sm' -t '%Y-%m-%dT%H:%M:%SZ' "$WATCH_FILE")
+  else
+    line_count="(file missing)"
+    size="(file missing)"
+    mtime="(file missing)"
+  fi
+
+  rotate_if_needed
+
+  {
+    printf '\n=== %s ===\n' "$ts"
+    printf 'file: %s\n' "$WATCH_FILE"
+    printf 'lines: %s · size: %s · mtime: %s\n' "$line_count" "$size" "$mtime"
+
+    # Truncation alarm — top of block so it grep-greps loud
+    if [[ "$line_count" != "(file missing)" ]] && (( line_count < 100 )); then
+      printf 'ALARM: line count %s is suspiciously low (HEAD is ~249) — possible truncation\n' "$line_count"
+
+      # Auto-heal: restore from HEAD immediately. The bash hash-bang shebang
+      # means we run with privilege the user has (= can git checkout). We
+      # gate on AUTOHEAL=1 (env, default on) so the user can disable for
+      # post-mortem-only mode by launchctl-bootstrapping with AUTOHEAL=0.
+      if [[ "${AUTOHEAL:-1}" == "1" ]]; then
+        if git -C "$HOME/.config" checkout HEAD -- aerospace/aerospace.toml 2>/dev/null; then
+          local restored
+          restored=$(wc -l < "$WATCH_FILE" | tr -d ' ')
+          printf 'AUTOHEAL: restored from HEAD → %s lines · reloading aerospace\n' "$restored"
+          aerospace reload-config >/dev/null 2>&1 || true
+          # Surface to the user via macOS notification (best-effort, ignore failure)
+          osascript -e "display notification \"aerospace.toml was truncated (line count $line_count) — auto-restored from HEAD ($restored lines)\" with title \"aerospace-toml-tripwire AUTOHEAL\"" 2>/dev/null || true
+        else
+          printf 'AUTOHEAL FAILED: git checkout returned non-zero\n'
+        fi
+      else
+        printf 'AUTOHEAL disabled via env (AUTOHEAL=%s)\n' "${AUTOHEAL}"
+      fi
+    fi
+
+    printf -- '--- lsof on watched file ---\n'
+    lsof "$WATCH_FILE" 2>/dev/null || printf '(no open handles)\n'
+
+    printf -- '--- suspect process snapshot ---\n'
+    ps -eo pid,ppid,user,etime,command 2>/dev/null \
+      | grep -E "aerospace-monitor-layout|aerospace-tile-gap|sketchybar|aerospace|claude|opencode|fswatch" \
+      | grep -v "grep -E\|aerospace-toml-tripwire" \
+      || printf '(no relevant processes)\n'
+
+    printf -- '--- git status (dotfiles) ---\n'
+    git -C "$HOME/.config" status --short -- "aerospace/aerospace.toml" 2>/dev/null || printf '(git unavailable)\n'
+
+    printf -- '--- git diff HEAD (first 40 lines) ---\n'
+    git -C "$HOME/.config" diff HEAD -- "aerospace/aerospace.toml" 2>/dev/null | head -40 \
+      || printf '(no diff)\n'
+
+    printf -- '--- recent ~/.config edits (last 5) ---\n'
+    find "$HOME/.config" -type f \
+      \( -name "*.toml" -o -name "*.sh" -o -name "*.json" -o -name "sketchybarrc" \) \
+      -not -path '*/.git/*' -not -path '*/node_modules/*' \
+      -mtime -1m 2>/dev/null \
+      | xargs -I{} stat -f '%Sm %N' -t '%H:%M:%S' {} 2>/dev/null \
+      | sort -r | head -5
+
+    printf '=== end %s ===\n' "$ts"
+  } >> "$LOG_FILE"
+}
+
+# Initial snapshot on launch (so we know baseline)
+record_event
+
+# Watch loop. fswatch -0 emits NUL-separated paths; one line per event.
+# --event Updated catches in-place writes; Created/Renamed catches atomic mv replacements.
+"$FSWATCH" -0 --event Updated --event Created --event Renamed --event Removed "$WATCH_FILE" \
+  | while IFS= read -r -d '' _path; do
+      record_event
+    done
