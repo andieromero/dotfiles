@@ -241,22 +241,26 @@ outer.top = [
 
 Why: sketchybar lives at `y_offset=0` on every display, but macOS reserves a small top strip on notched MacBooks even with the menu bar autohidden. So the bar visually starts ~8px lower on the built-in than on a non-notched external — meaning the **external** needs more top inset (95) to keep tiles below the bar; the built-in needs less (56). Match by `built-in` keyword, not `main` (which tracks macOS-main and flips when you change the main display).
 
-#### `aerospace-monitor-layout` truncation guard
+#### `aerospace-monitor-layout` truncation defense (three layers)
 
 `bin/aerospace-monitor-layout` regenerates the `[workspace-to-monitor-force-assignment]` block at the bottom of `aerospace.toml` based on currently-attached displays. The script does:
 
-1. `grep -n` to find the section header line, then
-2. `head -n $((line - 1))` to keep the prefix, then
-3. Append the new block.
+1. `grep -n` to find the section header line
+2. `head -n $((line - 1))` to keep the prefix
+3. Append the new block, atomic-mv into place
 
-If the section ever ends up at line 1, `head -n 0` outputs nothing and the entire file gets replaced with just the workspace block — wiping all keybindings and gap rules. The script now refuses to run when the section is at line 1 and prints a restore hint:
+That cycle has historically been the source of recurring 249→10-line truncations on monitor hotplug. Three layers of defense now make it safe:
+
+**Layer 1 — mkdir-based critical section.** `display_change` fires multiple times for one physical hotplug, so the script could be invoked 2-3× in a few hundred ms. Without serialization, one run's `head` could read a half-written file from a peer's `mv`, producing 0 prefix lines + 9-line block + 1 blank = the 10-line truncation. `acquire_lock()` uses `mkdir` (POSIX-atomic, zero-dependency — `flock(1)` isn't on macOS by default). First runner wins, others wait 5s and no-op.
+
+**Layer 2 — line-1 refusal guard.** If the section header somehow ends up at line 1 (truncated state), `head -n 0` would output nothing and the next run would amplify the wipeout. The script refuses to run in that state:
 
 ```
 aerospace-monitor-layout: refusing to run — config appears truncated
   Restore from git: git -C ~/.config checkout HEAD -- aerospace/aerospace.toml
 ```
 
-If you ever see that message, restore from git and the script will work normally on the next run.
+**Layer 3 — auto-heal via the tripwire.** If anything else (different writer, future bug class) does manage to truncate the file, the `aerospace-toml-tripwire` LaunchAgent watches via `fswatch` and triggers `git checkout HEAD -- aerospace/aerospace.toml` + `aerospace reload-config` + macOS notification within ~1s. End-to-end recovery: under 3 seconds, zero user intervention. See **Health check → `aerospace.toml` runtime tripwire** below.
 
 ### Keybindings cheat sheet
 
@@ -548,6 +552,24 @@ tmux kill-session -t main  # nuke the "main" session (all windows/panes die)
 
 ## Health check
 
+### `dotfiles-doctor` — full suite
+
+```bash
+dotfiles-doctor
+```
+
+Runs the layered test suite under `tests/`:
+
+- **`static/`** — file parsing + linting (~1s, no daemons): tomllib parse of `aerospace.toml`, `jq` parse of `karabiner.json`, `shellcheck` across all sketchybar plugins + bin scripts.
+- **`invariants/`** — semantic asserts (~1s, no daemons): every `cmd-N`/`ctrl-cmd-N`/`cmd-arrow` keybind present and pointing where expected; sketchybar `refresh`/`hotplug_listener`/`tile_gap_*`/`bar_toggle` items declared with the right wiring (regression guard for the 9d86c53 refresh-loop bug); minimum line-count floors on the configs that have been silently truncated before.
+- **`e2e/`** — runtime checks (~5s, SKIP if daemons down): `aerospace reload-config` exit 0, `sketchybar --query` round-trips, and the headline test — `test_display_change_refresh` fires `display_change` 3× in succession (the historical truncation trigger) and asserts `aerospace.toml` stays intact.
+
+Total: ~10s, ~30 distinct checks. Exits non-zero if anything fails.
+
+The pre-commit hook (`bin/git-hooks/pre-commit`) runs the `static + invariants` layers on every commit — bypass with `git commit --no-verify` if you're committing a deliberate refactor.
+
+### Quick daemon check
+
 ```bash
 for p in AeroSpace sketchybar borders karabiner_console_user_server; do
   pgrep -x "$p" >/dev/null && echo "✅ $p" || echo "❌ $p"
@@ -558,6 +580,16 @@ aerospace list-windows --all --format "%{workspace} | %{app-name}" | sort | head
 ```
 
 Expected: every service ✅, Brewfile satisfied, and windows distributed across the workspaces listed above.
+
+### `aerospace.toml` runtime tripwire
+
+A separate watcher daemon (LaunchAgent `com.andie.aerospace-toml-tripwire`) logs every write to `~/.config/aerospace/aerospace.toml` with full forensics (lsof, process snapshot, git diff). If the file drops below 100 lines, it auto-restores from HEAD and fires a macOS notification. See [`bin/git-hooks/README.md`](bin/git-hooks/README.md) for install + triage commands.
+
+After a suspected wipeout:
+```bash
+tail -200 ~/.local/state/aerospace-toml-writes.log
+grep -B 2 -A 30 ALARM ~/.local/state/aerospace-toml-writes.log
+```
 
 ## Troubleshooting
 
