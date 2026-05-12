@@ -5,6 +5,6 @@ if [ $# -eq 0 ]; then
     osascript -e "display notification \"$input\" with title \"term\""
   done
 else
-  osascript -e "display notification \"$@\" with title \"term\""
+  osascript -e "display notification \"$*\" with title \"term\""
 fi
 

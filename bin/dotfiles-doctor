@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# dotfiles-doctor — full healthcheck across the dotfiles configs.
+# Wraps tests/run.sh all with a banner. Non-zero exit on any failure.
+#
+# Run after big edits, after monitor hotplug, or any time something feels off.
+
+set -uo pipefail
+
+DOTFILES="${DOTFILES_DIR:-$HOME/.config}"
+
+if [[ -t 1 ]]; then
+  C_BOLD=$'\e[1m'; C_DIM=$'\e[2m'; C_RESET=$'\e[0m'
+else
+  C_BOLD=''; C_DIM=''; C_RESET=''
+fi
+
+printf '%sdotfiles-doctor%s %s%s%s\n' "$C_BOLD" "$C_RESET" "$C_DIM" "$(date '+%Y-%m-%d %H:%M:%S')" "$C_RESET"
+printf '%sdotfiles dir%s: %s\n' "$C_DIM" "$C_RESET" "$DOTFILES"
+
+exec "$DOTFILES/tests/run.sh" all

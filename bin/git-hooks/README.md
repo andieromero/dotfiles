@@ -11,9 +11,13 @@ That sets the clone's `core.hooksPath` so every hook in this directory fires.
 ## Hooks
 
 ### `pre-commit`
-Blocks commits that silently shrink a tracked file by ≥30% (added 2026-05-11 after `aerospace.toml` got truncated 249 → 11 lines on a new laptop and broke every cmd-* keybind).
+Two gates, each independently bypassable:
 
-Bypass intentionally with `git commit --no-verify`.
+1. **Shrink guard** — blocks commits that silently shrink a tracked file by ≥30% (added 2026-05-11 after `aerospace.toml` got truncated 249 → 11 lines on a new laptop and broke every cmd-* keybind).
+
+2. **Fast test suite** — runs `tests/run.sh static invariants` (~4s) on every commit. Fails the commit if any check fails. E2E layer is NOT in pre-commit (daemons may legitimately be down at commit time — run `dotfiles-doctor` for the full suite).
+
+Bypass either gate with `git commit --no-verify`.
 
 ---
 

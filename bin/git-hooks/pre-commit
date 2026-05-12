@@ -49,4 +49,26 @@ Otherwise re-check your working tree — you may be about to commit a wipeout.
 EOF
   exit 1
 fi
+
+# --- Test gate: static + invariants ---
+# Run only the fast, daemon-free layers in pre-commit. E2E is for dotfiles-doctor,
+# not commit-time (daemons may legitimately be down during a commit).
+# SKIP entirely if the runner is missing (e.g. fresh clone where tests/ hasn't
+# been pulled yet).
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+RUNNER="$REPO_ROOT/tests/run.sh"
+if [[ -x "$RUNNER" ]]; then
+  printf '\npre-commit: running fast test suite (static + invariants)\n' >&2
+  if ! "$RUNNER" static invariants >&2; then
+    cat >&2 <<'EOF'
+
+Blocked: static or invariant tests failed. Either fix the regression, or:
+  git commit --no-verify   # bypass when you know what you're doing
+
+Run `dotfiles-doctor` for the full suite including e2e.
+EOF
+    exit 1
+  fi
+fi
+
 exit 0
