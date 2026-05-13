@@ -107,12 +107,20 @@ if [ -n "$TMUX_BIN" ]; then
   fi
 fi
 
-# New session options
-new_options="[new] Ghostty (plain shell)"
+# New session options.
+# Order matters: fzf's default cursor lands on the first row, so the first
+# option here is the one a fresh terminal opens with a single Enter. Andie
+# defaults to flowen repl (AVE-aware opencode wrapper) — put it on top.
+new_options=""
+if [ -n "$TMUX_BIN" ] && command -v flowen >/dev/null 2>&1; then
+  new_options="[new] flowen repl (AVE-aware opencode)"
+elif [ -n "$TMUX_BIN" ] && command -v opencode >/dev/null 2>&1; then
+  # Fallback when flowen wrapper isn't installed but opencode is.
+  new_options="[new] opencode (named tmux + opencode)"
+fi
+[ -n "$TMUX_BIN" ] && new_options="${new_options:+$new_options\n}[new] claude (named tmux + claude)"
+new_options="${new_options:+$new_options\n}[new] Ghostty (plain shell)"
 [ -n "$TMUX_BIN" ] && new_options="$new_options\n[new] tmux"
-[ -n "$TMUX_BIN" ] && new_options="$new_options\n[new] claude (named tmux + claude)"
-[ -n "$TMUX_BIN" ] && command -v opencode >/dev/null 2>&1 \
-  && new_options="$new_options\n[new] opencode (named tmux + opencode)"
 [ -n "$ZELLIJ_BIN" ] && new_options="$new_options\n[new] zellij"
 
 if [ -n "$choices" ]; then
@@ -188,21 +196,28 @@ case "$selected" in
     log "tmux new claude-session exited with code $rc"
     exec "$SHELL"
     ;;
-  "[new] opencode (named tmux + opencode)")
+  "[new] flowen repl (AVE-aware opencode)"|"[new] opencode (named tmux + opencode)")
     # Mirror of the claude flow: one name spanning tmux session + window + the
-    # @opencode-name user option. Default agent is `flowen` (from opencode.json);
-    # override via OPENCODE_AGENT env if needed before launching ghostty.
+    # @opencode-name user option. Default launcher is `flowen repl` (the
+    # AVE-aware opencode wrapper that reads ~/.flowen/state.toml + agent.toml
+    # for venture-specific context overlay). Fallback to raw `opencode --agent flowen`
+    # when the flowen CLI isn't on PATH (covers fresh-machine bootstrap before
+    # flowen-poc is uv-installed).
+    if command -v flowen >/dev/null 2>&1; then
+      launcher="flowen repl"
+    else
+      launcher="opencode --agent ${OPENCODE_AGENT:-flowen}"
+    fi
     printf "Session name (empty = auto): " > /dev/tty
     read -r raw_name < /dev/tty
     name=$(printf '%s' "$raw_name" | tr -c 'A-Za-z0-9_-' '-' | sed 's/^-*//;s/-*$//')
-    [ -z "$name" ] && name="opencode-$$"
+    [ -z "$name" ] && name="flowen-$$"
     cd_to_last_dir
-    OPENCODE_AGENT="${OPENCODE_AGENT:-flowen}"
-    log "launching new opencode tmux session: $name (raw: $raw_name, agent: $OPENCODE_AGENT)"
+    log "launching new opencode tmux session: $name (raw: $raw_name, launcher: $launcher)"
     set +e
     "$TMUX_BIN" new-session -d -s "$name" -n "$name" 2>>"$LOG_FILE"
     "$TMUX_BIN" set-option -t "$name" "@opencode-name" "$name" 2>>"$LOG_FILE"
-    "$TMUX_BIN" send-keys -t "$name" "opencode --agent $OPENCODE_AGENT" Enter 2>>"$LOG_FILE"
+    "$TMUX_BIN" send-keys -t "$name" "$launcher" Enter 2>>"$LOG_FILE"
     "$TMUX_BIN" attach-session -t "$name" 2>>"$LOG_FILE"
     rc=$?
     log "tmux new opencode-session exited with code $rc"
