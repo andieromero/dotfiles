@@ -27,6 +27,33 @@ if [ "${FLOWEN_TAB_ON_OPEN:-0}" = "1" ] && [ -x "$HOME/.config/bin/flowen-tab-la
   exec "$HOME/.config/bin/flowen-tab-launcher"
 fi
 
+# --- Queue consumers (Phase B.1/B.2 consumer side) ---
+# Mission Control (or any producer) writes pending launch/attach intents to
+# ~/.flowen/*.queue. Picker checks both on startup; first hit wins.
+# Producer/consumer decoupling means MC doesn't need IPC with this process;
+# it just appends a JSON line and the next ghostty tab/window picks it up.
+FLOWEN_QUEUE_DIR="$HOME/.flowen"
+LAUNCH_QUEUE="$FLOWEN_QUEUE_DIR/pending-launches.queue"
+ATTACH_QUEUE="$FLOWEN_QUEUE_DIR/pending-attaches.queue"
+
+# Attach queue takes priority over launch queue: if user explicitly asked to
+# resume an existing session, that intent supersedes a stale launch.
+if [ -s "$ATTACH_QUEUE" ] && command -v jq >/dev/null 2>&1 && [ -n "$TMUX_BIN" ]; then
+  queued_session=$(head -1 "$ATTACH_QUEUE" | jq -r '.session_name // empty' 2>/dev/null)
+  if [ -n "$queued_session" ] && "$TMUX_BIN" has-session -t "$queued_session" 2>/dev/null; then
+    log "attach-queue: resuming '$queued_session' (popped from $ATTACH_QUEUE)"
+    tail -n +2 "$ATTACH_QUEUE" > "$ATTACH_QUEUE.tmp" 2>/dev/null && mv "$ATTACH_QUEUE.tmp" "$ATTACH_QUEUE"
+    exec "$TMUX_BIN" attach-session -t "$queued_session"
+  fi
+fi
+
+if [ -s "$LAUNCH_QUEUE" ] && command -v jq >/dev/null 2>&1 && [ -x "$HOME/.config/bin/flowen-tab-launcher" ]; then
+  # Name is consumed by flowen-tab-launcher itself (see its queue logic).
+  # We just exec it; the launcher's own queue-pop happens there.
+  log "launch-queue: non-empty — exec'ing flowen-tab-launcher (pops queue)"
+  exec "$HOME/.config/bin/flowen-tab-launcher"
+fi
+
 # Restore last working directory
 cd_to_last_dir() {
   local dir=""

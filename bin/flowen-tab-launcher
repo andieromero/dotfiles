@@ -30,8 +30,23 @@ else
   launcher="opencode --agent ${OPENCODE_AGENT:-flowen}"
 fi
 
-# Resolve session name: positional arg > env > auto-timestamp
+# Resolve session name: positional arg > env > pending-launches queue > auto-timestamp
 raw_name="${1:-${FLOWEN_TAB_NAME:-}}"
+
+# --- Queue consumer (Phase B.1 consumer side) ---
+# If a Mission Control button (or anything else) has queued a pending launch,
+# pop the first entry and use its name. JSON-line format, one per line.
+# Schema: {"name": "<session>", "venture": "<v>", "launched_at": "<iso8601>"}
+QUEUE_FILE="$HOME/.flowen/pending-launches.queue"
+if [ -z "$raw_name" ] && [ -s "$QUEUE_FILE" ] && command -v jq >/dev/null 2>&1; then
+  queued_name=$(head -1 "$QUEUE_FILE" | jq -r '.name // empty' 2>/dev/null)
+  if [ -n "$queued_name" ]; then
+    raw_name="$queued_name"
+    # Pop the consumed entry (atomic: write tail to tmp, then mv)
+    tail -n +2 "$QUEUE_FILE" > "$QUEUE_FILE.tmp" 2>/dev/null && mv "$QUEUE_FILE.tmp" "$QUEUE_FILE"
+  fi
+fi
+
 if [ -z "$raw_name" ]; then
   raw_name="flowen-$(date +%H%M%S)"
 fi
