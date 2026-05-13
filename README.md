@@ -550,6 +550,61 @@ tmux new -s <name>         # create a new named session
 tmux kill-session -t main  # nuke the "main" session (all windows/panes die)
 ```
 
+## Dev workflow with flowen repl
+
+Three paths to launch a `flowen repl` session — pick whichever matches what you're doing:
+
+### 1. Default picker path (most common)
+
+`Cmd+T` or `Cmd+N` → fzf picker opens with `[new] flowen repl (AVE-aware opencode)` as the **first** option (default cursor) → Enter → name prompt → flowen launches inside a named tmux session.
+
+The picker also tags running sessions: `[tmux / opencode]` for opencode-bearing panes, `[tmux / claude+opencode]` when both run in the same session. Click any tagged row to re-attach.
+
+### 2. Always-flowen shell mode
+
+```bash
+export FLOWEN_TAB_ON_OPEN=1
+```
+
+After this, every new ghostty tab/window opens straight into a fresh `flowen repl` — no picker, no prompts. The session name auto-derives from a timestamp (`flowen-HHMMSS`) unless `FLOWEN_TAB_NAME=my-name` is set. Unset the env to restore the picker.
+
+### 3. Issue-driven kickoff
+
+```bash
+flowen-start 128                       # issue 128 in current repo
+flowen-start 128 Flowen-AI/flowen-os   # explicit repo
+```
+
+Fetches the issue via `gh`, creates `issue-<N>` tmux session, launches `flowen repl`, and pipes a templated kickoff prompt as the first message. Mirror of `claude-start` for the opencode/flowen runtime.
+
+### Queue-driven launches (for external triggers)
+
+Mission Control, raycast, calendar events, or any other external launcher can queue a session via:
+
+```bash
+flowen-queue launch nestor-deep-dive flowen-os     # queue a new launch
+flowen-queue attach flowen-141522                  # queue a resume
+flowen-queue list                                  # see what's queued
+flowen-queue clear                                 # drop the queues
+```
+
+The next ghostty tab/window opened picks up the queued intent automatically. Schema:
+
+- `~/.flowen/pending-launches.queue` — JSON lines `{"name", "venture", "launched_at"}`
+- `~/.flowen/pending-attaches.queue` — JSON lines `{"session_name"}`
+
+Atomic-pop on consume; the picker and `flowen-tab-launcher` handle both queues. Producer/consumer are fully decoupled — MC writes a line, host process reads it on next tab open. No IPC, no sockets, no API server required.
+
+### Quick reference
+
+| Want | Tool |
+|---|---|
+| Picker with flowen as default | `Cmd+T` (existing keybind) |
+| Skip picker, always flowen | `export FLOWEN_TAB_ON_OPEN=1` |
+| Flowen on a GitHub issue | `flowen-start <issue>` |
+| Direct launch from any shell | `flowen-tab-launcher` |
+| Queue a launch from elsewhere | `flowen-queue launch <name>` |
+
 ## Health check
 
 ### `dotfiles-doctor` — full suite
