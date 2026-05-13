@@ -18,6 +18,15 @@ log() {
   echo "$(date '+%Y-%m-%d %H:%M:%S') [$$] $*" >> "$LOG_FILE"
 }
 
+# --- Early bypass: FLOWEN_TAB_ON_OPEN=1 skips fzf entirely ---
+# When set in the parent shell, every new ghostty tab/window opens straight
+# into a fresh flowen repl session. Unset for the next launch to restore the
+# picker. Honors FLOWEN_TAB_NAME for explicit naming.
+if [ "${FLOWEN_TAB_ON_OPEN:-0}" = "1" ] && [ -x "$HOME/.config/bin/flowen-tab-launcher" ]; then
+  log "FLOWEN_TAB_ON_OPEN=1 — bypassing picker, exec'ing flowen-tab-launcher"
+  exec "$HOME/.config/bin/flowen-tab-launcher"
+fi
+
 # Restore last working directory
 cd_to_last_dir() {
   local dir=""

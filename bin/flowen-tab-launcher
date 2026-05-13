@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# flowen-tab-launcher: zero-prompt direct-launch of `flowen repl` in a named
+# tmux session. Mirrors ghostty-session-picker's `[new] flowen repl` handler
+# but skips the name prompt + skips fzf entirely.
+#
+# Usage:
+#   flowen-tab-launcher                  # auto-named flowen-<timestamp>
+#   flowen-tab-launcher my-session-name  # explicit name
+#   FLOWEN_TAB_NAME=my-name flowen-tab-launcher  # name via env (for picker chaining)
+#
+# Use cases:
+#   1. As a shell alias / direct invocation when you know you want flowen
+#   2. Chained from ghostty-session-picker when FLOWEN_TAB_ON_OPEN=1
+#   3. Targeted by external launchers (karabiner, raycast) that want to open a
+#      ghostty tab and immediately drop into flowen
+
+set -euo pipefail
+
+TMUX_BIN="${TMUX_BIN:-$(command -v tmux 2>/dev/null || echo /opt/homebrew/bin/tmux)}"
+
+if [ -z "$TMUX_BIN" ] || ! "$TMUX_BIN" -V >/dev/null 2>&1; then
+  echo "flowen-tab-launcher: tmux not found at $TMUX_BIN" >&2
+  exec "$SHELL"
+fi
+
+# Pick launcher: flowen repl (AVE-aware) > raw opencode --agent flowen (fallback)
+if command -v flowen >/dev/null 2>&1; then
+  launcher="flowen repl"
+else
+  launcher="opencode --agent ${OPENCODE_AGENT:-flowen}"
+fi
+
+# Resolve session name: positional arg > env > auto-timestamp
+raw_name="${1:-${FLOWEN_TAB_NAME:-}}"
+if [ -z "$raw_name" ]; then
+  raw_name="flowen-$(date +%H%M%S)"
+fi
+# Sanitize: tmux session names disallow ':' and '.'; keep filesystem-safe
+name=$(printf '%s' "$raw_name" | tr -c 'A-Za-z0-9_-' '-' | sed 's/--*/-/g;s/^-*//;s/-*$//')
+[ -z "$name" ] && name="flowen-$$"
+
+# Restore last working dir if available (same as picker does)
+if [ -f "$HOME/.last_working_dir" ]; then
+  dir=$(cat "$HOME/.last_working_dir")
+  if [ -n "$dir" ] && [ -d "$dir" ]; then
+    cd "$dir"
+  fi
+fi
+
+# Create + name + launch + attach (same shape as picker's flowen handler)
+set +e
+"$TMUX_BIN" new-session -d -s "$name" -n "$name" 2>/dev/null
+"$TMUX_BIN" set-option -t "$name" "@opencode-name" "$name" 2>/dev/null
+"$TMUX_BIN" send-keys -t "$name" "$launcher" Enter 2>/dev/null
+"$TMUX_BIN" attach-session -t "$name" 2>/dev/null
+rc=$?
+
+# If attach failed (no terminal, edge cases), fall through to a regular shell
+if [ "$rc" -ne 0 ]; then
+  echo "flowen-tab-launcher: tmux attach exited $rc — dropping to shell" >&2
+  exec "$SHELL"
+fi
