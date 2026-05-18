@@ -4,6 +4,13 @@
 
 set -euo pipefail
 
+# Ghostty execs this script via `command =` with the bare macOS PATH (it does
+# not source zshrc/zprofile). Prepend the locations where flowen / opencode /
+# tmux / fzf actually live so `command -v` checks below succeed. Without this,
+# the `[new] flowen repl` option silently drops out of the picker because
+# `command -v flowen` returns false even though the binary is installed.
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"
+
 ZELLIJ_BIN="${ZELLIJ_BIN:-$(command -v zellij 2>/dev/null || echo "")}"
 TMUX_BIN="${TMUX_BIN:-$(command -v tmux 2>/dev/null || echo "/opt/homebrew/bin/tmux")}"
 FZF_BIN="${FZF_BIN:-$(command -v fzf 2>/dev/null || echo "/opt/homebrew/bin/fzf")}"
