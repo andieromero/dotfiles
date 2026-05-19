@@ -54,6 +54,17 @@ fi
 name=$(printf '%s' "$raw_name" | tr -c 'A-Za-z0-9_-' '-' | sed 's/--*/-/g;s/^-*//;s/-*$//')
 [ -z "$name" ] && name="flowen-$$"
 
+# Collision guard: if a tmux session with this name already exists, `tmux
+# new-session -d -s "$name"` fails silently (stderr is /dev/null below); then
+# `send-keys "$launcher" Enter` + `attach-session` target the EXISTING session,
+# which can be a claude-running session — typing `flowen repl` into claude's
+# prompt. Suffix-rename to avoid that. Mirrors flowen-start.
+if "$TMUX_BIN" has-session -t "$name" 2>/dev/null; then
+  orig_name="$name"
+  name="${name}-$(date +%H%M%S)"
+  echo "flowen-tab-launcher: session '$orig_name' exists; using '$name'" >&2
+fi
+
 # Restore last working dir if available (same as picker does)
 if [ -f "$HOME/.last_working_dir" ]; then
   dir=$(cat "$HOME/.last_working_dir")

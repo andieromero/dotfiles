@@ -208,10 +208,15 @@ case "$selected" in
     fi
     ;;
   "[new] tmux")
-    log "launching new tmux: ghostty-$$"
+    name="ghostty-$$"
+    if "$TMUX_BIN" has-session -t "$name" 2>/dev/null; then
+      name="ghostty-$$-$(date +%H%M%S)"
+      log "session collision; renamed to $name"
+    fi
+    log "launching new tmux: $name"
     cd_to_last_dir
     set +e
-    "$TMUX_BIN" new-session -s "ghostty-$$" 2>>"$LOG_FILE"
+    "$TMUX_BIN" new-session -s "$name" 2>>"$LOG_FILE"
     rc=$?
     log "tmux new-session exited with code $rc"
     exec "$SHELL"
@@ -226,6 +231,16 @@ case "$selected" in
     # Sanitize: tmux session names disallow ':' and '.'; keep it filesystem-safe.
     name=$(printf '%s' "$raw_name" | tr -c 'A-Za-z0-9_-' '-' | sed 's/^-*//;s/-*$//')
     [ -z "$name" ] && name="claude-$$"
+    # Collision guard: a duplicate-session error from `tmux new-session` is
+    # silently fatal — without this check, the script falls through to send-keys
+    # + attach against the EXISTING session, which (if it's running a different
+    # runtime) types `claude` into that runtime's prompt. Mirror flowen-start.
+    if "$TMUX_BIN" has-session -t "$name" 2>/dev/null; then
+      orig_name="$name"
+      name="${name}-$(date +%H%M%S)"
+      log "session '$orig_name' already exists; renaming to '$name'"
+      printf "Session '%s' exists — using '%s' instead.\n" "$orig_name" "$name" > /dev/tty
+    fi
     cd_to_last_dir
     log "launching new claude tmux session: $name (raw: $raw_name)"
     set +e
@@ -255,6 +270,15 @@ case "$selected" in
     read -r raw_name < /dev/tty
     name=$(printf '%s' "$raw_name" | tr -c 'A-Za-z0-9_-' '-' | sed 's/^-*//;s/-*$//')
     [ -z "$name" ] && name="flowen-$$"
+    # Collision guard — see claude branch for the why. Critical here: if a
+    # claude-running session already owns this name, attaching + send-keys would
+    # type `flowen repl` straight into the claude TUI's prompt.
+    if "$TMUX_BIN" has-session -t "$name" 2>/dev/null; then
+      orig_name="$name"
+      name="${name}-$(date +%H%M%S)"
+      log "session '$orig_name' already exists; renaming to '$name'"
+      printf "Session '%s' exists — using '%s' instead.\n" "$orig_name" "$name" > /dev/tty
+    fi
     cd_to_last_dir
     log "launching new opencode tmux session: $name (raw: $raw_name, launcher: $launcher)"
     set +e
