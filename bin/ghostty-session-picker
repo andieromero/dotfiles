@@ -4,6 +4,13 @@
 
 set -euo pipefail
 
+# Ghostty execs this script via `command =` with the bare macOS PATH (it does
+# not source zshrc/zprofile). Prepend the locations where flowen / opencode /
+# tmux / fzf actually live so `command -v` checks below succeed. Without this,
+# the `[new] flowen repl` option silently drops out of the picker because
+# `command -v flowen` returns false even though the binary is installed.
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"
+
 ZELLIJ_BIN="${ZELLIJ_BIN:-$(command -v zellij 2>/dev/null || echo "")}"
 TMUX_BIN="${TMUX_BIN:-$(command -v tmux 2>/dev/null || echo "/opt/homebrew/bin/tmux")}"
 FZF_BIN="${FZF_BIN:-$(command -v fzf 2>/dev/null || echo "/opt/homebrew/bin/fzf")}"
@@ -17,6 +24,42 @@ fi
 log() {
   echo "$(date '+%Y-%m-%d %H:%M:%S') [$$] $*" >> "$LOG_FILE"
 }
+
+# --- Early bypass: FLOWEN_TAB_ON_OPEN=1 skips fzf entirely ---
+# When set in the parent shell, every new ghostty tab/window opens straight
+# into a fresh flowen repl session. Unset for the next launch to restore the
+# picker. Honors FLOWEN_TAB_NAME for explicit naming.
+if [ "${FLOWEN_TAB_ON_OPEN:-0}" = "1" ] && [ -x "$HOME/.config/bin/flowen-tab-launcher" ]; then
+  log "FLOWEN_TAB_ON_OPEN=1 — bypassing picker, exec'ing flowen-tab-launcher"
+  exec "$HOME/.config/bin/flowen-tab-launcher"
+fi
+
+# --- Queue consumers (Phase B.1/B.2 consumer side) ---
+# Mission Control (or any producer) writes pending launch/attach intents to
+# ~/.flowen/*.queue. Picker checks both on startup; first hit wins.
+# Producer/consumer decoupling means MC doesn't need IPC with this process;
+# it just appends a JSON line and the next ghostty tab/window picks it up.
+FLOWEN_QUEUE_DIR="$HOME/.flowen"
+LAUNCH_QUEUE="$FLOWEN_QUEUE_DIR/pending-launches.queue"
+ATTACH_QUEUE="$FLOWEN_QUEUE_DIR/pending-attaches.queue"
+
+# Attach queue takes priority over launch queue: if user explicitly asked to
+# resume an existing session, that intent supersedes a stale launch.
+if [ -s "$ATTACH_QUEUE" ] && command -v jq >/dev/null 2>&1 && [ -n "$TMUX_BIN" ]; then
+  queued_session=$(head -1 "$ATTACH_QUEUE" | jq -r '.session_name // empty' 2>/dev/null)
+  if [ -n "$queued_session" ] && "$TMUX_BIN" has-session -t "$queued_session" 2>/dev/null; then
+    log "attach-queue: resuming '$queued_session' (popped from $ATTACH_QUEUE)"
+    tail -n +2 "$ATTACH_QUEUE" > "$ATTACH_QUEUE.tmp" 2>/dev/null && mv "$ATTACH_QUEUE.tmp" "$ATTACH_QUEUE"
+    exec "$TMUX_BIN" attach-session -t "$queued_session"
+  fi
+fi
+
+if [ -s "$LAUNCH_QUEUE" ] && command -v jq >/dev/null 2>&1 && [ -x "$HOME/.config/bin/flowen-tab-launcher" ]; then
+  # Name is consumed by flowen-tab-launcher itself (see its queue logic).
+  # We just exec it; the launcher's own queue-pop happens there.
+  log "launch-queue: non-empty — exec'ing flowen-tab-launcher (pops queue)"
+  exec "$HOME/.config/bin/flowen-tab-launcher"
+fi
 
 # Restore last working directory
 cd_to_last_dir() {
@@ -50,9 +93,12 @@ if [ -n "$TMUX_BIN" ]; then
   tmux_items=""
 
   # Group by session: for each session, find the best label.
-  # Priority: Claude session name > first window name > session name.
+  # Priority: Claude/opencode tag > first window name > session name.
+  # Both runtimes can coexist in different panes of the same tmux session, so
+  # we capture each independently and the tag reflects whichever (or both) we find.
   while IFS= read -r sess_name; do
     claude_names=""
+    opencode_found=""
     win_names=""
 
     while IFS= read -r wline; do
@@ -61,24 +107,34 @@ if [ -n "$TMUX_BIN" ]; then
       pane_pid="${wline##* }"
       win_names="${win_names:+$win_names, }$win_name"
 
-      # Check if Claude Code is running in this pane
-      if [ -d "$SESSIONS_DIR" ]; then
-        for cpid in $(ps -eo pid,ppid 2>/dev/null | awk -v p="$pane_pid" '$2==p {print $1}'); do
-          if [ -f "$SESSIONS_DIR/$cpid.json" ]; then
-            cname=""
-            if command -v jq &>/dev/null; then
-              cname=$(jq -r '.name // empty' "$SESSIONS_DIR/$cpid.json" 2>/dev/null)
-            fi
-            [ -z "$cname" ] && cname="$win_name"
-            claude_names="${claude_names:+$claude_names, }$cname"
-            break
+      # Walk this pane's descendants once; check each child for claude or opencode.
+      for cpid in $(ps -eo pid,ppid 2>/dev/null | awk -v p="$pane_pid" '$2==p {print $1}'); do
+        # Claude Code: has a session JSON under ~/.claude/sessions/<pid>.json
+        if [ -d "$SESSIONS_DIR" ] && [ -f "$SESSIONS_DIR/$cpid.json" ]; then
+          cname=""
+          if command -v jq &>/dev/null; then
+            cname=$(jq -r '.name // empty' "$SESSIONS_DIR/$cpid.json" 2>/dev/null)
           fi
-        done
-      fi
+          [ -z "$cname" ] && cname="$win_name"
+          claude_names="${claude_names:+$claude_names, }$cname"
+          continue
+        fi
+        # opencode: detect by process name (no per-session JSON file like claude has).
+        # The TUI binary is `opencode` in its argv[0]. Check the command field.
+        ccmd=$(ps -p "$cpid" -o command= 2>/dev/null)
+        case "$ccmd" in
+          *opencode*) opencode_found=1 ;;
+        esac
+      done
     done < <("$TMUX_BIN" list-windows -t "$sess_name" -F "#{window_name} #{pane_pid}" 2>/dev/null)
 
-    if [ -n "$claude_names" ]; then
+    # Compose tag — both runtimes can coexist; pick the most specific label.
+    if [ -n "$claude_names" ] && [ -n "$opencode_found" ]; then
+      item="[tmux / claude+opencode] ${claude_names}§${sess_name}"
+    elif [ -n "$claude_names" ]; then
       item="[tmux / claude] ${claude_names}§${sess_name}"
+    elif [ -n "$opencode_found" ]; then
+      item="[tmux / opencode] ${win_names:-$sess_name}§${sess_name}"
     else
       item="[tmux] ${win_names:-$sess_name}§${sess_name}"
     fi
@@ -94,10 +150,20 @@ if [ -n "$TMUX_BIN" ]; then
   fi
 fi
 
-# New session options
-new_options="[new] Ghostty (plain shell)"
+# New session options.
+# Order matters: fzf's default cursor lands on the first row, so the first
+# option here is the one a fresh terminal opens with a single Enter. Andie
+# defaults to flowen repl (AVE-aware opencode wrapper) — put it on top.
+new_options=""
+if [ -n "$TMUX_BIN" ] && command -v flowen >/dev/null 2>&1; then
+  new_options="[new] flowen repl (AVE-aware opencode)"
+elif [ -n "$TMUX_BIN" ] && command -v opencode >/dev/null 2>&1; then
+  # Fallback when flowen wrapper isn't installed but opencode is.
+  new_options="[new] opencode (named tmux + opencode)"
+fi
+[ -n "$TMUX_BIN" ] && new_options="${new_options:+$new_options\n}[new] claude (named tmux + claude)"
+new_options="${new_options:+$new_options\n}[new] Ghostty (plain shell)"
 [ -n "$TMUX_BIN" ] && new_options="$new_options\n[new] tmux"
-[ -n "$TMUX_BIN" ] && new_options="$new_options\n[new] claude (named tmux + claude)"
 [ -n "$ZELLIJ_BIN" ] && new_options="$new_options\n[new] zellij"
 
 if [ -n "$choices" ]; then
@@ -142,10 +208,15 @@ case "$selected" in
     fi
     ;;
   "[new] tmux")
-    log "launching new tmux: ghostty-$$"
+    name="ghostty-$$"
+    if "$TMUX_BIN" has-session -t "$name" 2>/dev/null; then
+      name="ghostty-$$-$(date +%H%M%S)"
+      log "session collision; renamed to $name"
+    fi
+    log "launching new tmux: $name"
     cd_to_last_dir
     set +e
-    "$TMUX_BIN" new-session -s "ghostty-$$" 2>>"$LOG_FILE"
+    "$TMUX_BIN" new-session -s "$name" 2>>"$LOG_FILE"
     rc=$?
     log "tmux new-session exited with code $rc"
     exec "$SHELL"
@@ -160,6 +231,16 @@ case "$selected" in
     # Sanitize: tmux session names disallow ':' and '.'; keep it filesystem-safe.
     name=$(printf '%s' "$raw_name" | tr -c 'A-Za-z0-9_-' '-' | sed 's/^-*//;s/-*$//')
     [ -z "$name" ] && name="claude-$$"
+    # Collision guard: a duplicate-session error from `tmux new-session` is
+    # silently fatal — without this check, the script falls through to send-keys
+    # + attach against the EXISTING session, which (if it's running a different
+    # runtime) types `claude` into that runtime's prompt. Mirror flowen-start.
+    if "$TMUX_BIN" has-session -t "$name" 2>/dev/null; then
+      orig_name="$name"
+      name="${name}-$(date +%H%M%S)"
+      log "session '$orig_name' already exists; renaming to '$name'"
+      printf "Session '%s' exists — using '%s' instead.\n" "$orig_name" "$name" > /dev/tty
+    fi
     cd_to_last_dir
     log "launching new claude tmux session: $name (raw: $raw_name)"
     set +e
@@ -173,10 +254,47 @@ case "$selected" in
     log "tmux new claude-session exited with code $rc"
     exec "$SHELL"
     ;;
-  "[tmux / claude]"*)
-    # Extract session name after § delimiter
+  "[new] flowen repl (AVE-aware opencode)"|"[new] opencode (named tmux + opencode)")
+    # Mirror of the claude flow: one name spanning tmux session + window + the
+    # @opencode-name user option. Default launcher is `flowen repl` (the
+    # AVE-aware opencode wrapper that reads ~/.flowen/state.toml + agent.toml
+    # for venture-specific context overlay). Fallback to raw `opencode --agent flowen`
+    # when the flowen CLI isn't on PATH (covers fresh-machine bootstrap before
+    # flowen-poc is uv-installed).
+    if command -v flowen >/dev/null 2>&1; then
+      launcher="flowen repl"
+    else
+      launcher="opencode --agent ${OPENCODE_AGENT:-flowen}"
+    fi
+    printf "Session name (empty = auto): " > /dev/tty
+    read -r raw_name < /dev/tty
+    name=$(printf '%s' "$raw_name" | tr -c 'A-Za-z0-9_-' '-' | sed 's/^-*//;s/-*$//')
+    [ -z "$name" ] && name="flowen-$$"
+    # Collision guard — see claude branch for the why. Critical here: if a
+    # claude-running session already owns this name, attaching + send-keys would
+    # type `flowen repl` straight into the claude TUI's prompt.
+    if "$TMUX_BIN" has-session -t "$name" 2>/dev/null; then
+      orig_name="$name"
+      name="${name}-$(date +%H%M%S)"
+      log "session '$orig_name' already exists; renaming to '$name'"
+      printf "Session '%s' exists — using '%s' instead.\n" "$orig_name" "$name" > /dev/tty
+    fi
+    cd_to_last_dir
+    log "launching new opencode tmux session: $name (raw: $raw_name, launcher: $launcher)"
+    set +e
+    "$TMUX_BIN" new-session -d -s "$name" -n "$name" 2>>"$LOG_FILE"
+    "$TMUX_BIN" set-option -t "$name" "@opencode-name" "$name" 2>>"$LOG_FILE"
+    "$TMUX_BIN" send-keys -t "$name" "$launcher" Enter 2>>"$LOG_FILE"
+    "$TMUX_BIN" attach-session -t "$name" 2>>"$LOG_FILE"
+    rc=$?
+    log "tmux new opencode-session exited with code $rc"
+    exec "$SHELL"
+    ;;
+  "[tmux / claude]"*|"[tmux / opencode]"*|"[tmux / claude+opencode]"*)
+    # All "agent-tagged" tmux sessions attach the same way — the tag is just a
+    # display hint for the picker. Session name comes after the § delimiter.
     session_name="${selected##*§}"
-    log "attaching tmux (claude): $session_name"
+    log "attaching tmux (agent-tagged): $session_name"
     set +e
     "$TMUX_BIN" attach-session -t "$session_name" 2>>"$LOG_FILE"
     rc=$?
