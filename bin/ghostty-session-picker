@@ -285,27 +285,32 @@ KILL_RELOAD_CMD="while IFS= read -r line; do case \"\$line\" in '++'*) continue 
 # For now, show fzf with the pre-built list.
 TIPS_CMD="printf '%s\n' \
   '' \
-  '  LEGEND' \
-  '  codu  codu builder session       ++  new session' \
-  '  cc    claude code session        --  plain shell' \
+  '   ╭── legend ──────────────────────────────────────────────────────╮' \
+  '   │  codu   codu builder session          ++   create new session │' \
+  '   │  cc     claude code session           --   plain shell / tmux │' \
+  '   ╰────────────────────────────────────────────────────────────────╯' \
   '' \
-  '  KEYS' \
-  '  enter   attach to session        tab     multi-select' \
-  '  ctrl-x  kill + delete context    esc     cancel' \
+  '   ╭── reading the columns ─────────────────────────────────────────╮' \
+  '   │  150K   context window size (tokens sent per message)         │' \
+  '   │  \$6     total cost for this session so far                    │' \
+  '   │  3d     time since last activity in this session              │' \
+  '   ╰────────────────────────────────────────────────────────────────╯' \
   '' \
-  '  COLUMNS                          WHAT CTRL-X DOES' \
-  '  150K  context tokens             kills process (frees RAM)' \
-  '  \$6    total session cost         deletes conversation (frees context)' \
-  '  3d    last activity              session history is gone' \
+  '   ╭── ctrl-x cleanup ─────────────────────────────────────────────╮' \
+  '   │  kills the process             frees RAM                     │' \
+  '   │  deletes the conversation      frees context + disk          │' \
+  '   │  session history is gone       start fresh with ++ new       │' \
+  '   ╰────────────────────────────────────────────────────────────────╯' \
   '' \
-  '  BEST PRACTICES' \
-  '  >200K tokens?  /compact inside the session to shrink context' \
-  '  stale (3d+)?   tab to select, ctrl-x to clean up' \
-  '  fresh start?   ctrl-x old session, ++ new, pick same plan' \
+  '   ╭── best practices ─────────────────────────────────────────────╮' \
+  '   │  >200K tokens?   type /compact inside to shrink context      │' \
+  '   │  stale (3d+)?    tab to select multiple, ctrl-x to clean     │' \
+  '   │  fresh start?    ctrl-x old, then ++ new and pick same plan  │' \
+  '   ╰────────────────────────────────────────────────────────────────╯' \
   ''"
 
 selected=$(cat "$CHOICES_FILE" | "$FZF_BIN" \
-  --height=80% \
+  --height=100% \
   --layout=reverse \
   --border=rounded \
   --border-label=' sessions ' \
@@ -317,7 +322,7 @@ selected=$(cat "$CHOICES_FILE" | "$FZF_BIN" \
   --delimiter='§' \
   --with-nth=1 \
   --preview="$TIPS_CMD" \
-  --preview-window='down,40%,wrap,border-rounded' \
+  --preview-window='down,50%,border-rounded' \
   --preview-label=' guide ' \
   --preview-label-pos=2 \
   --bind "ctrl-x:execute-silent($KILL_RELOAD_CMD)+reload($0 --list-only)" \
