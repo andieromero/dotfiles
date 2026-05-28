@@ -21,7 +21,8 @@ if [ -z "$FZF_BIN" ]; then
   exec "$SHELL"
 fi
 
-CONTEXT_BIN="$HOME/.local/bin/claude-context-for-pid"
+CLAUDE_CONTEXT_BIN="$HOME/.local/bin/claude-context-for-pid"
+OC_CONTEXT_BIN="$HOME/.local/bin/opencode-context-for-pid"
 
 # --list-only: called by fzf reload after kill. Rebuild choices, print, exit.
 # This re-execs the list-building logic without launching fzf again.
@@ -135,8 +136,8 @@ if [ -n "$TMUX_BIN" ]; then
           [ -z "$cname" ] && cname="$win_name"
           claude_names="${claude_names:+$claude_names, }$cname"
           # Grab context stats for this Claude process
-          if [ -x "$CONTEXT_BIN" ]; then
-            ctx=$("$CONTEXT_BIN" "$cpid" 2>/dev/null || true)
+          if [ -x "$CLAUDE_CONTEXT_BIN" ]; then
+            ctx=$("$CLAUDE_CONTEXT_BIN" "$cpid" 2>/dev/null || true)
             [ -n "$ctx" ] && context_info="$ctx"
           fi
           continue
@@ -145,7 +146,14 @@ if [ -n "$TMUX_BIN" ]; then
         # The TUI binary is `opencode` in its argv[0]. Check the command field.
         ccmd=$(ps -p "$cpid" -o command= 2>/dev/null)
         case "$ccmd" in
-          *opencode*) opencode_found=1 ;;
+          *opencode*)
+            opencode_found=1
+            # Grab context stats for this opencode process
+            if [ -x "$OC_CONTEXT_BIN" ]; then
+              ctx=$("$OC_CONTEXT_BIN" "$cpid" 2>/dev/null || true)
+              [ -n "$ctx" ] && context_info="$ctx"
+            fi
+            ;;
         esac
       done
     done < <("$TMUX_BIN" list-windows -t "$sess_name" -F "#{window_name} #{pane_pid}" 2>/dev/null)
@@ -159,7 +167,7 @@ if [ -n "$TMUX_BIN" ]; then
     elif [ -n "$claude_names" ]; then
       item="[tmux / claude] ${claude_names}${ctx_suffix}§${sess_name}"
     elif [ -n "$opencode_found" ]; then
-      item="[tmux / opencode] ${win_names:-$sess_name}§${sess_name}"
+      item="[tmux / opencode] ${win_names:-$sess_name}${ctx_suffix}§${sess_name}"
     else
       item="[tmux] ${win_names:-$sess_name}§${sess_name}"
     fi

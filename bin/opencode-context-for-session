@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# opencode-context-for-session — given an opencode session ID (or "latest"),
+# emit a compact context usage string like "142K ctx  $0.83  opus4.6"
+#
+# Usage:
+#   opencode-context-for-session <session-id>
+#   opencode-context-for-session latest
+# Output: "142K ctx  $0.83  opus4.6"  (or empty string if no data)
+
+set -euo pipefail
+
+SESSION_ID="${1:-}"
+[ -z "$SESSION_ID" ] && exit 0
+
+OC_DB="$HOME/.local/share/opencode/opencode.db"
+[ -f "$OC_DB" ] || exit 0
+command -v sqlite3 >/dev/null 2>&1 || exit 0
+
+# Resolve "latest" to the most recently updated non-archived session
+if [ "$SESSION_ID" = "latest" ]; then
+  SESSION_ID=$(sqlite3 "$OC_DB" "
+    SELECT id FROM session WHERE time_archived IS NULL
+    ORDER BY time_updated DESC LIMIT 1;
+  " 2>/dev/null || true)
+  [ -z "$SESSION_ID" ] && exit 0
+fi
+
+result=$(sqlite3 "$OC_DB" "
+  SELECT
+    MAX(json_extract(data, '$.tokens.total')) as peak_ctx,
+    SUM(json_extract(data, '$.cost')) as total_cost,
+    json_extract(data, '$.modelID') as model
+  FROM message
+  WHERE session_id = '$SESSION_ID'
+  AND json_extract(data, '$.role') = 'assistant'
+  AND json_extract(data, '$.tokens.total') > 0;
+" 2>/dev/null || true)
+
+[ -z "$result" ] && exit 0
+
+peak=$(echo "$result" | cut -d'|' -f1)
+cost=$(echo "$result" | cut -d'|' -f2)
+model=$(echo "$result" | cut -d'|' -f3)
+
+[ -z "$peak" ] || [ "$peak" = "" ] && exit 0
+
+# Format tokens
+if [ "$peak" -ge 1000000 ] 2>/dev/null; then
+  ctx_str="$(echo "$peak" | awk '{printf "%.1fM", $1/1000000}')ctx"
+elif [ "$peak" -ge 1000 ] 2>/dev/null; then
+  ctx_str="$(echo "$peak" | awk '{printf "%dK", $1/1000}')ctx"
+else
+  ctx_str="${peak}ctx"
+fi
+
+# Format cost
+cost_str=""
+if [ -n "$cost" ] && [ "$cost" != "" ]; then
+  cost_str=$(printf ' $%.2f' "$cost" 2>/dev/null || true)
+fi
+
+echo "${ctx_str}${cost_str}"

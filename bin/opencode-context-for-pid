@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# opencode-context-for-pid — given an opencode process PID (node wrapper),
+# find its session in the DB and emit context stats.
+#
+# Strategy: if the process was started with -s <session-id>, use that directly.
+# Otherwise, match process start time (epoch) to the nearest session time_created.
+#
+# Usage: opencode-context-for-pid <pid>
+# Output: "142K ctx  $0.83" (or empty)
+
+set -euo pipefail
+
+PID="${1:-}"
+[ -z "$PID" ] && exit 0
+
+OC_DB="$HOME/.local/share/opencode/opencode.db"
+[ -f "$OC_DB" ] || exit 0
+command -v sqlite3 >/dev/null 2>&1 || exit 0
+
+# Check command line for -s session ID
+cmd=$(ps -p "$PID" -o command= 2>/dev/null || true)
+[ -z "$cmd" ] && exit 0
+
+session_id=""
+case "$cmd" in
+  *-s\ ses_*) session_id=$(echo "$cmd" | grep -o 'ses_[^ ]*') ;;
+esac
+
+if [ -z "$session_id" ]; then
+  # Match by process start time. Get epoch of process start.
+  # macOS ps -o lstart gives "Mon May 25 14:28:57 2026" (with possible leading spaces)
+  lstart=$(ps -p "$PID" -o lstart= 2>/dev/null | xargs || true)
+  [ -z "$lstart" ] && exit 0
+  # Convert to epoch milliseconds
+  epoch_s=$(date -j -f "%a %b %d %T %Y" "$lstart" +%s 2>/dev/null || true)
+  [ -z "$epoch_s" ] && exit 0
+  epoch_ms=$((epoch_s * 1000))
+
+  # Find session created within 2 minutes of process start (opencode takes
+  # up to ~40s to initialize before creating the DB session record)
+  session_id=$(sqlite3 "$OC_DB" "
+    SELECT id FROM session
+    WHERE ABS(time_created - $epoch_ms) < 120000
+    AND time_archived IS NULL
+    ORDER BY ABS(time_created - $epoch_ms)
+    LIMIT 1;
+  " 2>/dev/null || true)
+fi
+
+[ -z "$session_id" ] && exit 0
+
+# Get peak context + cost
+result=$(sqlite3 "$OC_DB" "
+  SELECT
+    MAX(json_extract(data, '$.tokens.total')) as peak_ctx,
+    SUM(json_extract(data, '$.cost')) as total_cost
+  FROM message
+  WHERE session_id = '$session_id'
+  AND json_extract(data, '$.role') = 'assistant'
+  AND json_extract(data, '$.tokens.total') > 0;
+" 2>/dev/null || true)
+
+[ -z "$result" ] && exit 0
+
+peak=$(echo "$result" | cut -d'|' -f1)
+cost=$(echo "$result" | cut -d'|' -f2)
+
+[ -z "$peak" ] || [ "$peak" = "" ] && exit 0
+
+# Format
+if [ "$peak" -ge 1000000 ] 2>/dev/null; then
+  ctx_str="$(echo "$peak" | awk '{printf "%.1fM", $1/1000000}') ctx"
+elif [ "$peak" -ge 1000 ] 2>/dev/null; then
+  ctx_str="$(echo "$peak" | awk '{printf "%dK", $1/1000}') ctx"
+else
+  ctx_str="${peak} ctx"
+fi
+
+cost_str=""
+if [ -n "$cost" ] && [ "$cost" != "" ]; then
+  cost_str=$(printf '  $%.2f' "$cost" 2>/dev/null || true)
+fi
+
+echo "${ctx_str}${cost_str}"

@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# flowen-tmux-status: emit tmux status-left and status-right content.
+# Called by tmux status-interval (every 5s) via shell-command in tmux.conf.
+#
+# Left:  AVE badge + session name
+# Right: opencode/claude context tokens + cost + model
+#
+# Usage:
+#   flowen-tmux-status left    → AVE + session
+#   flowen-tmux-status right   → context info for current pane's agent session
+
+set -euo pipefail
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"
+
+SIDE="${1:-left}"
+STATE_FILE="$HOME/.flowen/state.toml"
+OC_DB="$HOME/.local/share/opencode/opencode.db"
+CLAUDE_SESSIONS="$HOME/.claude/sessions"
+CLAUDE_PROJECTS="$HOME/.claude/projects"
+
+# --- LEFT: AVE badge + session name ---
+if [ "$SIDE" = "left" ]; then
+  # Read active AVE
+  ave=""
+  if [ -f "$STATE_FILE" ]; then
+    ave=$(sed -n 's/^active_ave *= *"\([^"]*\)".*/\1/p' "$STATE_FILE" 2>/dev/null || true)
+  fi
+  [ -z "$ave" ] && ave="—"
+  ave_upper=$(echo "$ave" | tr '[:lower:]' '[:upper:]')
+
+  sess_name=""
+  if [ -n "${TMUX:-}" ]; then
+    sess_name=$(tmux display-message -p '#{session_name}' 2>/dev/null || true)
+  fi
+
+  # AVE in pink, session in white
+  echo "#[fg=#ff1493,bold]${ave_upper}#[fg=#414550] │ #[fg=#bf00ff,bold]${sess_name:-shell}#[default]"
+  exit 0
+fi
+
+# --- RIGHT: agent context for current pane ---
+if [ "$SIDE" = "right" ]; then
+  [ -z "${TMUX:-}" ] && exit 0
+
+  pane_pid=$(tmux display-message -p '#{pane_pid}' 2>/dev/null) || exit 0
+
+  # Walk children of pane to find agent process
+  agent_type=""
+  agent_pid=""
+
+  for cpid in $(ps -eo pid,ppid 2>/dev/null | awk -v p="$pane_pid" '$2==p {print $1}'); do
+    cmd=$(ps -p "$cpid" -o command= 2>/dev/null || true)
+    case "$cmd" in
+      *opencode*)
+        agent_type="opencode"
+        agent_pid="$cpid"
+        break
+        ;;
+    esac
+    # Check for Claude Code
+    if [ -f "$CLAUDE_SESSIONS/$cpid.json" ]; then
+      agent_type="claude"
+      agent_pid="$cpid"
+      break
+    fi
+  done
+
+  # No agent found in this pane
+  if [ -z "$agent_type" ]; then
+    echo ""
+    exit 0
+  fi
+
+  # --- Claude Code: use PID helper ---
+  if [ "$agent_type" = "claude" ]; then
+    ctx=$("$HOME/.local/bin/claude-context-for-pid" "$agent_pid" 2>/dev/null || true)
+    if [ -n "$ctx" ]; then
+      echo "#[fg=#87ceeb]$ctx#[default] "
+    fi
+    exit 0
+  fi
+
+  # --- opencode: use PID helper (matches via -s flag or process start time) ---
+  if [ "$agent_type" = "opencode" ]; then
+    ctx=$("$HOME/.local/bin/opencode-context-for-pid" "$agent_pid" 2>/dev/null || true)
+    if [ -n "$ctx" ]; then
+      echo "#[fg=#87ceeb]${ctx}#[default] "
+    fi
+    exit 0
+  fi
+
+  exit 0
+fi
