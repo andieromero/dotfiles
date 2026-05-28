@@ -113,11 +113,29 @@ if [ -n "$TMUX_BIN" ]; then
   # Priority: Claude/opencode tag > first window name > session name.
   # Both runtimes can coexist in different panes of the same tmux session, so
   # we capture each independently and the tag reflects whichever (or both) we find.
-  while IFS= read -r sess_name; do
+  now_epoch=$(date +%s)
+  while IFS= read -r sess_line; do
+    sess_name="${sess_line%% *}"
+    sess_activity="${sess_line##* }"
     claude_names=""
     opencode_found=""
     win_names=""
     context_info=""
+
+    # Compute relative age from last activity
+    age_str=""
+    if [ -n "$sess_activity" ] && [ "$sess_activity" -gt 0 ] 2>/dev/null; then
+      age_s=$((now_epoch - sess_activity))
+      if [ "$age_s" -lt 60 ]; then
+        age_str="now"
+      elif [ "$age_s" -lt 3600 ]; then
+        age_str="$((age_s / 60))m ago"
+      elif [ "$age_s" -lt 86400 ]; then
+        age_str="$((age_s / 3600))h ago"
+      else
+        age_str="$((age_s / 86400))d ago"
+      fi
+    fi
 
     while IFS= read -r wline; do
       # Format: window_name pane_pid
@@ -159,20 +177,23 @@ if [ -n "$TMUX_BIN" ]; then
     done < <("$TMUX_BIN" list-windows -t "$sess_name" -F "#{window_name} #{pane_pid}" 2>/dev/null)
 
     # Compose tag — both runtimes can coexist; pick the most specific label.
-    # Append context stats (tokens + cost) when available for Claude sessions.
-    ctx_suffix=""
-    [ -n "$context_info" ] && ctx_suffix="  [$context_info]"
+    # Append context stats and age when available.
+    meta=""
+    [ -n "$context_info" ] && meta="$context_info"
+    [ -n "$age_str" ] && meta="${meta:+$meta  }${age_str}"
+    meta_suffix=""
+    [ -n "$meta" ] && meta_suffix="  ($meta)"
     if [ -n "$claude_names" ] && [ -n "$opencode_found" ]; then
-      item="[tmux / claude+opencode] ${claude_names}${ctx_suffix}§${sess_name}"
+      item="[tmux / claude+opencode] ${claude_names}${meta_suffix}§${sess_name}"
     elif [ -n "$claude_names" ]; then
-      item="[tmux / claude] ${claude_names}${ctx_suffix}§${sess_name}"
+      item="[tmux / claude] ${claude_names}${meta_suffix}§${sess_name}"
     elif [ -n "$opencode_found" ]; then
-      item="[tmux / opencode] ${win_names:-$sess_name}${ctx_suffix}§${sess_name}"
+      item="[tmux / opencode] ${win_names:-$sess_name}${meta_suffix}§${sess_name}"
     else
-      item="[tmux] ${win_names:-$sess_name}§${sess_name}"
+      item="[tmux] ${win_names:-$sess_name}${meta_suffix}§${sess_name}"
     fi
     tmux_items="${tmux_items:+$tmux_items\n}$item"
-  done < <("$TMUX_BIN" list-sessions -F "#{session_name}" 2>/dev/null)
+  done < <("$TMUX_BIN" list-sessions -F "#{session_name} #{session_activity}" 2>/dev/null)
 
   if [ -n "$tmux_items" ]; then
     if [ -n "$choices" ]; then
@@ -230,7 +251,7 @@ selected=$(cat "$CHOICES_FILE" | "$FZF_BIN" \
   --layout=reverse \
   --border=rounded \
   --prompt="session > " \
-  --header="enter=attach  tab=select  ctrl-x/ctrl-d=kill" \
+  --header="enter=attach  tab=select  ctrl-x=kill session (ends conversation, frees RAM)" \
   --no-info \
   --multi \
   --delimiter='§' \
