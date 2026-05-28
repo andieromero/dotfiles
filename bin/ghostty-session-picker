@@ -181,29 +181,39 @@ if [ -n "$TMUX_BIN" ]; then
       done
     done < <("$TMUX_BIN" list-windows -t "$sess_name" -F "#{window_name} #{pane_pid}" 2>/dev/null)
 
-    # Compose compact label: tag · name · meta
-    # Tags: oc = opencode, cc = claude, -- = plain tmux
+    # Compose compact label with dot-leader alignment.
+    # Tags: fl = flowen, cc = claude code, -- = plain shell
     if [ -n "$claude_names" ] && [ -n "$opencode_found" ]; then
-      tag="cc+oc"
+      tag="fl+cc"
       label="${claude_names}"
     elif [ -n "$claude_names" ]; then
       tag="cc"
       label="${claude_names}"
     elif [ -n "$opencode_found" ]; then
-      tag="oc"
+      tag="fl"
       label="${win_names:-$sess_name}"
     else
       tag="--"
       label="${win_names:-$sess_name}"
     fi
-    # Build right-side metadata: context cost age plan
-    meta_parts=""
-    [ -n "$context_info" ] && meta_parts="$context_info"
-    [ -n "$age_str" ] && meta_parts="${meta_parts:+$meta_parts }${age_str}"
-    [ -n "$plan_info" ] && meta_parts="${meta_parts:+$meta_parts }${plan_info}"
-    meta_col=""
-    [ -n "$meta_parts" ] && meta_col="  ${meta_parts}"
-    item="${tag} ${label}${meta_col}§${sess_name}"
+    # Build right-side metadata columns
+    meta_right=""
+    [ -n "$context_info" ] && meta_right="$context_info"
+    [ -n "$age_str" ] && meta_right="${meta_right:+$meta_right  }${age_str}"
+    [ -n "$plan_info" ] && meta_right="${meta_right:+$meta_right  }${plan_info}"
+    # Format: "oc name ··········· 272K  $27  3d ago"
+    left="${tag} ${label}"
+    if [ -n "$meta_right" ]; then
+      left_len=${#left}
+      right_len=${#meta_right}
+      total=76  # target width (leave room for fzf chrome)
+      dots_len=$((total - left_len - right_len - 2))
+      [ "$dots_len" -lt 2 ] && dots_len=2
+      dots=$(printf '%*s' "$dots_len" '' | tr ' ' '·')
+      item="${left} ${dots} ${meta_right}§${sess_name}"
+    else
+      item="${left}§${sess_name}"
+    fi
     tmux_items="${tmux_items:+$tmux_items\n}$item"
   done < <("$TMUX_BIN" list-sessions -F "#{session_name} #{session_activity}" 2>/dev/null)
 
@@ -262,7 +272,7 @@ selected=$(cat "$CHOICES_FILE" | "$FZF_BIN" \
   --layout=reverse \
   --border=rounded \
   --prompt="session > " \
-  --header="enter=attach  tab=multi  ctrl-x=kill  oc=opencode cc=claude" \
+  --header="enter·attach  tab·multi  ctrl-x·kill  │  fl=flowen  cc=claude  --=shell  ++=new" \
   --no-info \
   --multi \
   --delimiter='§' \
@@ -414,7 +424,7 @@ case "$selected" in
     log "tmux new opencode-session exited with code $rc"
     exec "$SHELL"
     ;;
-  "oc "*|"cc "*|"cc+oc "*|"-- "*)
+  "fl "*|"cc "*|"fl+cc "*|"-- "*)
     # All existing sessions — tag is just display. Session name after § delimiter.
     session_name="${selected##*§}"
     log "attaching: $session_name"
