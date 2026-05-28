@@ -197,26 +197,48 @@ if [ -n "$TMUX_BIN" ]; then
       label="${win_names:-$sess_name}"
     fi
     # Build fixed-width right columns: tokens(5) cost(4) age(3)
-    # Format: "codu name ·········· 272K $27 3d"
+    # Color tokens by threshold: green <100K, yellow 100-200K, red >200K
     col_tok=""
+    col_tok_colored=""
     col_cost=""
     col_age=""
     if [ -n "$context_info" ]; then
       # context_info is like "272K  $27.44" — split into token + cost
       col_tok=$(echo "$context_info" | awk '{print $1}')
       col_cost=$(echo "$context_info" | awk '{c=$2; gsub(/\.[0-9]*$/,"",c); if(c=="$0") c="<$1"; print c}')
+      # Parse token count to number for color thresholds
+      tok_num=0
+      case "$col_tok" in
+        *M) tok_num=$(echo "$col_tok" | sed 's/M//' | awk '{printf "%d", $1 * 1000}') ;;
+        *K) tok_num=$(echo "$col_tok" | sed 's/K//') ;;
+        *)  tok_num="$col_tok" ;;
+      esac
+      # Color: green(<100K) yellow(100-200K) red(>200K)
+      if [ "$tok_num" -gt 200 ] 2>/dev/null; then
+        col_tok_colored="\033[31m$(printf '%5s' "$col_tok")\033[0m"  # red
+      elif [ "$tok_num" -gt 100 ] 2>/dev/null; then
+        col_tok_colored="\033[33m$(printf '%5s' "$col_tok")\033[0m"  # yellow
+      else
+        col_tok_colored="\033[32m$(printf '%5s' "$col_tok")\033[0m"  # green
+      fi
     fi
     [ -n "$age_str" ] && col_age=$(echo "$age_str" | sed 's/ ago//')
-    # Compose right side with fixed widths
+    # Compose right side — plain version for dot-leader width calc
     meta_right=""
     [ -n "$col_tok" ] && meta_right=$(printf '%5s' "$col_tok")
     [ -n "$col_cost" ] && meta_right="${meta_right} $(printf '%-4s' "$col_cost")"
     [ -n "$col_age" ] && meta_right="${meta_right:+$meta_right }$(printf '%-3s' "$col_age")"
+    # Colored version for display (ANSI codes don't affect fzf width with --ansi)
+    meta_colored=""
+    [ -n "$col_tok_colored" ] && meta_colored="${col_tok_colored}"
+    [ -n "$col_cost" ] && meta_colored="${meta_colored} $(printf '%-4s' "$col_cost")"
+    [ -n "$col_age" ] && meta_colored="${meta_colored:+$meta_colored }$(printf '%-3s' "$col_age")"
     # If only age (no context), just show age right-aligned
     if [ -z "$col_tok" ] && [ -n "$col_age" ]; then
       meta_right="$col_age"
+      meta_colored="$col_age"
     fi
-    [ -n "$plan_info" ] && meta_right="${meta_right:+$meta_right }${plan_info}"
+    [ -n "$plan_info" ] && meta_right="${meta_right:+$meta_right }${plan_info}" && meta_colored="${meta_colored:+$meta_colored }${plan_info}"
     left="${tag} ${label}"
     if [ -n "$meta_right" ]; then
       left_len=${#left}
@@ -225,7 +247,7 @@ if [ -n "$TMUX_BIN" ]; then
       dots_len=$((total - left_len - right_len - 2))
       [ "$dots_len" -lt 2 ] && dots_len=2
       dots=$(printf '%*s' "$dots_len" '' | tr ' ' '·')
-      item="${left} ${dots} ${meta_right}§${sess_name}"
+      item="${left} \033[90m${dots}\033[0m ${meta_colored}§${sess_name}"
     else
       item="${left}§${sess_name}"
     fi
@@ -291,21 +313,30 @@ TIPS_CMD="printf '%s\n' \
   '   ╰────────────────────────────────────────────────────────────────╯' \
   '' \
   '   ╭── reading the columns ─────────────────────────────────────────╮' \
-  '   │  150K   context window size (tokens sent per message)         │' \
+  '   │  \033[32m  88K\033[0m   green  = healthy context                             │' \
+  '   │  \033[33m 150K\033[0m   yellow = getting large, consider /compact            │' \
+  '   │  \033[31m 272K\033[0m   red    = degraded, /compact or ctrl-x to clear       │' \
   '   │  \$6     total cost for this session so far                    │' \
   '   │  3d     time since last activity in this session              │' \
   '   ╰────────────────────────────────────────────────────────────────╯' \
   '' \
-  '   ╭── ctrl-x cleanup ─────────────────────────────────────────────╮' \
+  '   ╭── ctrl-x: full cleanup ───────────────────────────────────────╮' \
   '   │  kills the process             frees RAM                     │' \
   '   │  deletes the conversation      frees context + disk          │' \
-  '   │  session history is gone       start fresh with ++ new       │' \
+  '   │  session history is gone       cannot be undone              │' \
   '   ╰────────────────────────────────────────────────────────────────╯' \
   '' \
-  '   ╭── best practices ─────────────────────────────────────────────╮' \
-  '   │  >200K tokens?   type /compact inside to shrink context      │' \
-  '   │  stale (3d+)?    tab to select multiple, ctrl-x to clean     │' \
-  '   │  fresh start?    ctrl-x old, then ++ new and pick same plan  │' \
+  '   ╭── when to /compact vs clear ──────────────────────────────────╮' \
+  '   │                                                              │' \
+  '   │  \033[33m/compact\033[0m  (inside the session)                              │' \
+  '   │  100-200K tokens and still mid-task                          │' \
+  '   │  shrinks context, keeps the conversation alive               │' \
+  '   │                                                              │' \
+  '   │  \033[31mctrl-x clear\033[0m  (from this picker)                            │' \
+  '   │  >200K tokens, or session is stale (3d+)                     │' \
+  '   │  done with the task, or context too degraded to save         │' \
+  '   │  start fresh: ctrl-x → ++ new → pick the same plan          │' \
+  '   │                                                              │' \
   '   ╰────────────────────────────────────────────────────────────────╯' \
   ''"
 
@@ -317,6 +348,7 @@ selected=$(cat "$CHOICES_FILE" | "$FZF_BIN" \
   --border-label-pos=2 \
   --prompt="session > " \
   --header='enter·attach  tab·multi  ctrl-x·kill' \
+  --ansi \
   --no-info \
   --multi \
   --delimiter='§' \
