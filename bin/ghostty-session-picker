@@ -272,11 +272,10 @@ if [ -n "$TMUX_BIN" ]; then
     if [ -n "$meta_right" ]; then
       left_len=${#left_plain}
       right_len=${#meta_right}
-      # Detect terminal width; default to 72 for split screens
+      # Fit to terminal width; hscroll handles overflow
       term_w=$(tput cols 2>/dev/null || echo 72)
       total=$((term_w - 8))  # leave room for fzf chrome + pointer
       [ "$total" -lt 40 ] && total=40
-      [ "$total" -gt 72 ] && total=72
       dots_len=$((total - left_len - right_len - 2))
       [ "$dots_len" -lt 2 ] && dots_len=2
       dots=$(printf '%*s' "$dots_len" '' | tr ' ' '·')
@@ -385,6 +384,7 @@ selected=$(cat "$CHOICES_FILE" | "$FZF_BIN" \
   --prompt="session > " \
   --header='enter·attach  tab·multi  ctrl-x·kill  ctrl-d·delete' \
   --ansi \
+  --hscroll-off=10 \
   --no-info \
   --multi \
   --delimiter='§' \
