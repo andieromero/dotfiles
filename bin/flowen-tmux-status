@@ -29,12 +29,18 @@ if [ "$SIDE" = "left" ]; then
   ave_upper=$(echo "$ave" | tr '[:lower:]' '[:upper:]')
 
   sess_name=""
+  plan_name=""
   if [ -n "${TMUX:-}" ]; then
     sess_name=$(tmux display-message -p '#{session_name}' 2>/dev/null || true)
+    plan_name=$(tmux show-options -v "@flowen-plan" 2>/dev/null || true)
   fi
 
-  # AVE in pink, session in white
-  echo "#[fg=#ff1493,bold]${ave_upper}#[fg=#414550] │ #[fg=#bf00ff,bold]${sess_name:-shell}#[default]"
+  # AVE in pink, session in purple, plan in dim
+  if [ -n "$plan_name" ]; then
+    echo "#[fg=#ff1493,bold]${ave_upper}#[fg=#414550] │ #[fg=#bf00ff,bold]${sess_name:-shell}#[fg=#414550] │ #[fg=#aaaaaa]${plan_name}#[default]"
+  else
+    echo "#[fg=#ff1493,bold]${ave_upper}#[fg=#414550] │ #[fg=#bf00ff,bold]${sess_name:-shell}#[default]"
+  fi
   exit 0
 fi
 

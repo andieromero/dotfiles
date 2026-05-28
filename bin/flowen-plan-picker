@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# flowen-plan-picker: fzf-based plan selector for session startup.
+# Returns the selected plan name (slug) on stdout, or empty if skipped.
+#
+# Usage:
+#   plan=$(flowen-plan-picker)
+#   # Returns e.g. "flowen-os-mission-control-beta" or "" if user hit Esc
+#
+# Shows in-progress plans sorted by priority, with progress % and next task.
+
+set -euo pipefail
+
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"
+FZF_BIN="${FZF_BIN:-$(command -v fzf 2>/dev/null || echo "/opt/homebrew/bin/fzf")}"
+BRAIN="${FLOWEN_BRAIN:-$HOME/Flowen/twin-andie}"
+PLANS_DIR="$BRAIN/experiences/plans"
+
+[ -d "$PLANS_DIR" ] || exit 0
+
+# Build plan list from plan files with status: in_progress
+choices=""
+while IFS='|' read -r priority name pct next_task; do
+  # Format: priority-sorted, show progress and next task
+  case "$priority" in
+    HIGH)   tag="!!" ;;
+    MEDIUM) tag="! " ;;
+    *)      tag="  " ;;
+  esac
+  line="${tag} ${name}  (${pct}%)  ${next_task}"
+  choices="${choices:+$choices\n}${line}"
+done < <(
+  python3 -c "
+import os, re, glob
+
+plans_dir = '$PLANS_DIR'
+seen = set()
+plans = []
+
+for pattern in ['*-plan.md', '**/*-plan.md']:
+    for f in glob.glob(os.path.join(plans_dir, pattern), recursive=True):
+        if f in seen: continue
+        seen.add(f)
+        with open(f) as fh:
+            content = fh.read()
+        status = 'unknown'
+        priority = 'LOW'
+        m = re.search(r'^status:\s*(\S+)', content, re.MULTILINE)
+        if m: status = m.group(1)
+        if status != 'in_progress': continue
+        m = re.search(r'^priority:\s*(\S+)', content, re.MULTILINE)
+        if m: priority = m.group(1)
+        done = len(re.findall(r'- \[x\]', content, re.IGNORECASE))
+        total = done + len(re.findall(r'- \[ \]', content))
+        pct = int(done/total*100) if total > 0 else 0
+        name = os.path.basename(f).replace('-plan.md', '')
+        next_task = ''
+        for line in content.split('\n'):
+            if re.match(r'\s*- \[ \]', line):
+                next_task = re.sub(r'^\s*- \[ \]\s*', '', line).strip()[:55]
+                break
+        plans.append((priority, name, pct, next_task))
+    
+order = {'HIGH': 0, 'MEDIUM': 1, 'LOW': 2}
+plans.sort(key=lambda x: (order.get(x[0], 3), -x[2]))
+for p, name, pct, nt in plans:
+    print(f'{p}|{name}|{pct}|{nt}')
+" 2>/dev/null
+)
+
+# Add a skip option at the top
+choices="   (no plan — blank session)\n$choices"
+
+[ -z "$choices" ] && exit 0
+
+selected=$(echo -e "$choices" | "$FZF_BIN" \
+  --height=~60% \
+  --layout=reverse \
+  --border=rounded \
+  --prompt="plan > " \
+  --header="pick a plan to work on (esc = skip)" \
+  --no-info \
+  --color=pointer:green,prompt:blue,header:dim) || exit 0
+
+# Handle skip
+case "$selected" in
+  *"no plan"*|*"blank session"*) exit 0 ;;
+esac
+
+# Extract plan name — it's the second field after the priority tag
+# Format: "!! plan-name  (72%)  next task..."
+plan_name=$(echo "$selected" | sed 's/^[! ]*//' | awk '{print $1}')
+echo "$plan_name"

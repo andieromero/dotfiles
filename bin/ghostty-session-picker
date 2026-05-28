@@ -121,6 +121,11 @@ if [ -n "$TMUX_BIN" ]; then
     opencode_found=""
     win_names=""
     context_info=""
+    plan_info=""
+
+    # Check for plan attached to this session
+    plan_val=$("$TMUX_BIN" show-options -t "$sess_name" -v "@flowen-plan" 2>/dev/null || true)
+    [ -n "$plan_val" ] && plan_info="$plan_val"
 
     # Compute relative age from last activity
     age_str=""
@@ -181,6 +186,7 @@ if [ -n "$TMUX_BIN" ]; then
     meta=""
     [ -n "$context_info" ] && meta="$context_info"
     [ -n "$age_str" ] && meta="${meta:+$meta  }${age_str}"
+    [ -n "$plan_info" ] && meta="${meta:+$meta  }plan:${plan_info}"
     meta_suffix=""
     [ -n "$meta" ] && meta_suffix="  ($meta)"
     if [ -n "$claude_names" ] && [ -n "$opencode_found" ]; then
@@ -304,8 +310,18 @@ case "$selected" in
     #   - tmux session name
     #   - tmux window name (→ Ghostty title via set-titles)
     #   - claude session name (via @claude-name tmux option, honored by claude-tmux-sync)
-    printf "Session name (empty = auto): " > /dev/tty
-    read -r raw_name < /dev/tty
+    # Plan picker: select an in-progress plan or skip for a blank session.
+    plan_name=""
+    PLAN_PICKER="$HOME/.local/bin/flowen-plan-picker"
+    if [ -x "$PLAN_PICKER" ]; then
+      plan_name=$("$PLAN_PICKER" < /dev/tty 2>/dev/tty || true)
+    fi
+    if [ -n "$plan_name" ]; then
+      raw_name="$plan_name"
+    else
+      printf "Session name (empty = auto): " > /dev/tty
+      read -r raw_name < /dev/tty
+    fi
     # Sanitize: tmux session names disallow ':' and '.'; keep it filesystem-safe.
     name=$(printf '%s' "$raw_name" | tr -c 'A-Za-z0-9_-' '-' | sed 's/^-*//;s/-*$//')
     [ -z "$name" ] && name="claude-$$"
@@ -320,13 +336,19 @@ case "$selected" in
       printf "Session '%s' exists — using '%s' instead.\n" "$orig_name" "$name" > /dev/tty
     fi
     cd_to_last_dir
-    log "launching new claude tmux session: $name (raw: $raw_name)"
+    log "launching new claude tmux session: $name (raw: $raw_name, plan: $plan_name)"
     set +e
     # Set the @claude-name option BEFORE claude starts so the SessionStart hook
     # (claude-tmux-sync) sees it. Then run claude inside the named session.
     "$TMUX_BIN" new-session -d -s "$name" -n "$name" 2>>"$LOG_FILE"
     "$TMUX_BIN" set-option -t "$name" "@claude-name" "$name" 2>>"$LOG_FILE"
+    [ -n "$plan_name" ] && "$TMUX_BIN" set-option -t "$name" "@flowen-plan" "$plan_name" 2>>"$LOG_FILE"
     "$TMUX_BIN" send-keys -t "$name" "claude --model claude-opus-4-6" Enter 2>>"$LOG_FILE"
+    # If a plan was selected, send /dispatch after a brief delay for claude to boot
+    if [ -n "$plan_name" ]; then
+      sleep 4
+      "$TMUX_BIN" send-keys -t "$name" "/dispatch $plan_name" Enter 2>>"$LOG_FILE"
+    fi
     "$TMUX_BIN" attach-session -t "$name" 2>>"$LOG_FILE"
     rc=$?
     log "tmux new claude-session exited with code $rc"
@@ -344,8 +366,20 @@ case "$selected" in
     else
       launcher="opencode --agent ${OPENCODE_AGENT:-flowen}"
     fi
-    printf "Session name (empty = auto): " > /dev/tty
-    read -r raw_name < /dev/tty
+    # Plan picker: select an in-progress plan or skip for a blank session.
+    # If a plan is selected, the plan slug becomes the session name and
+    # /dispatch <plan> is sent as the first message after the agent starts.
+    plan_name=""
+    PLAN_PICKER="$HOME/.local/bin/flowen-plan-picker"
+    if [ -x "$PLAN_PICKER" ]; then
+      plan_name=$("$PLAN_PICKER" < /dev/tty 2>/dev/tty || true)
+    fi
+    if [ -n "$plan_name" ]; then
+      raw_name="$plan_name"
+    else
+      printf "Session name (empty = auto): " > /dev/tty
+      read -r raw_name < /dev/tty
+    fi
     name=$(printf '%s' "$raw_name" | tr -c 'A-Za-z0-9_-' '-' | sed 's/^-*//;s/-*$//')
     [ -z "$name" ] && name="flowen-$$"
     # Collision guard — see claude branch for the why. Critical here: if a
@@ -358,11 +392,18 @@ case "$selected" in
       printf "Session '%s' exists — using '%s' instead.\n" "$orig_name" "$name" > /dev/tty
     fi
     cd_to_last_dir
-    log "launching new opencode tmux session: $name (raw: $raw_name, launcher: $launcher)"
+    log "launching new opencode tmux session: $name (raw: $raw_name, plan: $plan_name, launcher: $launcher)"
     set +e
     "$TMUX_BIN" new-session -d -s "$name" -n "$name" 2>>"$LOG_FILE"
     "$TMUX_BIN" set-option -t "$name" "@opencode-name" "$name" 2>>"$LOG_FILE"
+    # Store plan name as tmux user option so status bar + future tools can read it
+    [ -n "$plan_name" ] && "$TMUX_BIN" set-option -t "$name" "@flowen-plan" "$plan_name" 2>>"$LOG_FILE"
     "$TMUX_BIN" send-keys -t "$name" "$launcher" Enter 2>>"$LOG_FILE"
+    # If a plan was selected, send /dispatch after a brief delay for the agent to boot
+    if [ -n "$plan_name" ]; then
+      sleep 3
+      "$TMUX_BIN" send-keys -t "$name" "/dispatch $plan_name" Enter 2>>"$LOG_FILE"
+    fi
     "$TMUX_BIN" attach-session -t "$name" 2>>"$LOG_FILE"
     rc=$?
     log "tmux new opencode-session exited with code $rc"
