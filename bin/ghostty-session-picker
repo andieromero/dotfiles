@@ -122,10 +122,21 @@ if [ -n "$TMUX_BIN" ]; then
     win_names=""
     context_info=""
     plan_info=""
+    git_dirty=0
+    git_unpushed=0
+    git_branch=""
 
     # Check for plan attached to this session
     plan_val=$("$TMUX_BIN" show-options -t "$sess_name" -v "@flowen-plan" 2>/dev/null || true)
     [ -n "$plan_val" ] && plan_info="$plan_val"
+
+    # Check git status in session's working directory
+    pane_path=$("$TMUX_BIN" display-message -t "$sess_name" -p '#{pane_current_path}' 2>/dev/null || true)
+    if [ -n "$pane_path" ] && git -C "$pane_path" rev-parse --git-dir >/dev/null 2>&1; then
+      git_dirty=$(git -C "$pane_path" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+      git_unpushed=$(git -C "$pane_path" log --oneline '@{upstream}..HEAD' 2>/dev/null | wc -l | tr -d ' ')
+      git_branch=$(git -C "$pane_path" branch --show-current 2>/dev/null || true)
+    fi
 
     # Compute relative age from last activity
     age_str=""
@@ -239,9 +250,20 @@ if [ -n "$TMUX_BIN" ]; then
       meta_colored="$col_age"
     fi
     [ -n "$plan_info" ] && meta_right="${meta_right:+$meta_right }${plan_info}" && meta_colored="${meta_colored:+$meta_colored }${plan_info}"
-    left="${tag} ${label}"
+    # Git status indicator: ● = uncommitted work, ↑ = unpushed commits
+    git_prefix=""
+    git_prefix_plain=""
+    if [ "$git_dirty" -gt 0 ] 2>/dev/null; then
+      git_prefix="\033[33m●\033[0m "  # yellow dot = uncommitted changes
+      git_prefix_plain="● "
+    elif [ "$git_unpushed" -gt 0 ] 2>/dev/null; then
+      git_prefix="\033[36m↑\033[0m "  # cyan arrow = unpushed commits
+      git_prefix_plain="↑ "
+    fi
+    left="${git_prefix}${tag} ${label}"
+    left_plain="${git_prefix_plain}${tag} ${label}"
     if [ -n "$meta_right" ]; then
-      left_len=${#left}
+      left_len=${#left_plain}
       right_len=${#meta_right}
       total=72
       dots_len=$((total - left_len - right_len - 2))
@@ -296,11 +318,15 @@ CHOICES_FILE=$(mktemp /tmp/ghostty-picker-XXXXXX)
 echo -e "$choices" > "$CHOICES_FILE"
 trap 'rm -f "$CHOICES_FILE"' EXIT
 
-# Build the kill+reload command for fzf's --bind.
+# Kill commands for fzf --bind.
 # fzf passes selected lines via {+f} (file with selected items, one per line).
-# We read that file, kill matching tmux sessions, then re-exec the list builder.
 SESSION_KILL="$HOME/.local/bin/session-kill"
-KILL_RELOAD_CMD="while IFS= read -r line; do case \"\$line\" in '++'*) continue ;; esac; sess=\${line##*§}; [ -z \"\$sess\" ] && continue; att=\$($TMUX_BIN display-message -p '#{session_name}' 2>/dev/null || true); [ \"\$sess\" = \"\$att\" ] && continue; $SESSION_KILL \"\$sess\" 2>/dev/null; done < {+f}; $0 --list-only"
+
+# ctrl-x: safe kill — ends process (frees RAM), keeps conversation in DB
+SAFE_KILL_CMD="while IFS= read -r line; do case \"\$line\" in '++'*) continue ;; esac; sess=\${line##*§}; [ -z \"\$sess\" ] && continue; att=\$($TMUX_BIN display-message -p '#{session_name}' 2>/dev/null || true); [ \"\$sess\" = \"\$att\" ] && continue; $TMUX_BIN kill-session -t \"\$sess\" 2>/dev/null; done < {+f}; $0 --list-only"
+
+# ctrl-d: full delete — ends process AND deletes conversation from DB
+FULL_DELETE_CMD="while IFS= read -r line; do case \"\$line\" in '++'*) continue ;; esac; sess=\${line##*§}; [ -z \"\$sess\" ] && continue; att=\$($TMUX_BIN display-message -p '#{session_name}' 2>/dev/null || true); [ \"\$sess\" = \"\$att\" ] && continue; $SESSION_KILL \"\$sess\" 2>/dev/null; done < {+f}; $0 --list-only"
 
 # --list-only: when called with this flag, just print the choices and exit
 # (used by fzf reload after kills). Detected at the top of the script below.
@@ -310,32 +336,32 @@ TIPS_CMD="printf '%s\n' \
   '   ╭── legend ──────────────────────────────────────────────────────╮' \
   '   │  codu   codu builder session          ++   create new session │' \
   '   │  cc     claude code session           --   plain shell / tmux │' \
+  '   │  \033[33m●\033[0m      uncommitted git changes           \033[36m↑\033[0m    unpushed commits │' \
   '   ╰────────────────────────────────────────────────────────────────╯' \
   '' \
-  '   ╭── reading the columns ─────────────────────────────────────────╮' \
-  '   │  \033[32m  88K\033[0m   green  = healthy context                             │' \
-  '   │  \033[33m 150K\033[0m   yellow = getting large, consider /compact            │' \
-  '   │  \033[31m 272K\033[0m   red    = degraded, /compact or ctrl-x to clear       │' \
-  '   │  \$6     total cost for this session so far                    │' \
-  '   │  3d     time since last activity in this session              │' \
+  '   ╭── context health ──────────────────────────────────────────────╮' \
+  '   │  \033[32m  88K\033[0m   green    healthy, full coherence                     │' \
+  '   │  \033[33m 150K\033[0m   yellow   getting large, consider /compact            │' \
+  '   │  \033[31m 272K\033[0m   red      degraded quality, slow + expensive          │' \
+  '   │  \$6     total cost for this session                           │' \
+  '   │  3d     time since last activity                              │' \
   '   ╰────────────────────────────────────────────────────────────────╯' \
   '' \
-  '   ╭── ctrl-x: full cleanup ───────────────────────────────────────╮' \
-  '   │  kills the process             frees RAM                     │' \
-  '   │  deletes the conversation      frees context + disk          │' \
-  '   │  session history is gone       cannot be undone              │' \
-  '   ╰────────────────────────────────────────────────────────────────╯' \
-  '' \
-  '   ╭── when to /compact vs clear ──────────────────────────────────╮' \
+  '   ╭── actions ─────────────────────────────────────────────────────╮' \
   '   │                                                              │' \
-  '   │  \033[33m/compact\033[0m  (inside the session)                              │' \
-  '   │  100-200K tokens and still mid-task                          │' \
-  '   │  shrinks context, keeps the conversation alive               │' \
+  '   │  ctrl-x   \033[33msafe kill\033[0m     ends process, frees RAM              │' \
+  '   │           conversation stays in DB, can resume later         │' \
+  '   │           use when: pausing work, freeing memory             │' \
   '   │                                                              │' \
-  '   │  \033[31mctrl-x clear\033[0m  (from this picker)                            │' \
-  '   │  >200K tokens, or session is stale (3d+)                     │' \
-  '   │  done with the task, or context too degraded to save         │' \
-  '   │  start fresh: ctrl-x → ++ new → pick the same plan          │' \
+  '   │  ctrl-d   \033[31mfull delete\033[0m   kills process + deletes conversation │' \
+  '   │           frees RAM + context + disk — cannot be undone      │' \
+  '   │           use when: session is stale (3d+), context >200K,   │' \
+  '   │           or you are done with this task entirely             │' \
+  '   │                                                              │' \
+  '   │  /compact (inside session)  shrinks context, keeps convo     │' \
+  '   │           use when: 100-200K tokens and still mid-task       │' \
+  '   │                                                              │' \
+  '   │  \033[33m●\033[0m = uncommitted changes — attach + commit before killing    │' \
   '   │                                                              │' \
   '   ╰────────────────────────────────────────────────────────────────╯' \
   ''"
@@ -347,7 +373,7 @@ selected=$(cat "$CHOICES_FILE" | "$FZF_BIN" \
   --border-label=' sessions ' \
   --border-label-pos=2 \
   --prompt="session > " \
-  --header='enter·attach  tab·multi  ctrl-x·kill' \
+  --header='enter·attach  tab·multi  ctrl-x·kill  ctrl-d·delete' \
   --ansi \
   --no-info \
   --multi \
@@ -357,8 +383,8 @@ selected=$(cat "$CHOICES_FILE" | "$FZF_BIN" \
   --preview-window='down,50%,border-rounded' \
   --preview-label=' guide ' \
   --preview-label-pos=2 \
-  --bind "ctrl-x:execute-silent($KILL_RELOAD_CMD)+reload($0 --list-only)" \
-  --bind "ctrl-d:execute-silent($KILL_RELOAD_CMD)+reload($0 --list-only)" \
+  --bind "ctrl-x:execute-silent($SAFE_KILL_CMD)+reload($0 --list-only)" \
+  --bind "ctrl-d:execute-silent($FULL_DELETE_CMD)+reload($0 --list-only)" \
   --color=pointer:green,prompt:blue,header:dim) || {
   # If fzf is cancelled (Esc/Ctrl-C), start plain shell
   exec "$SHELL"
