@@ -181,23 +181,29 @@ if [ -n "$TMUX_BIN" ]; then
       done
     done < <("$TMUX_BIN" list-windows -t "$sess_name" -F "#{window_name} #{pane_pid}" 2>/dev/null)
 
-    # Compose tag — both runtimes can coexist; pick the most specific label.
-    # Append context stats and age when available.
-    meta=""
-    [ -n "$context_info" ] && meta="$context_info"
-    [ -n "$age_str" ] && meta="${meta:+$meta  }${age_str}"
-    [ -n "$plan_info" ] && meta="${meta:+$meta  }plan:${plan_info}"
-    meta_suffix=""
-    [ -n "$meta" ] && meta_suffix="  ($meta)"
+    # Compose compact label: tag · name · meta
+    # Tags: oc = opencode, cc = claude, -- = plain tmux
     if [ -n "$claude_names" ] && [ -n "$opencode_found" ]; then
-      item="[tmux / claude+opencode] ${claude_names}${meta_suffix}§${sess_name}"
+      tag="cc+oc"
+      label="${claude_names}"
     elif [ -n "$claude_names" ]; then
-      item="[tmux / claude] ${claude_names}${meta_suffix}§${sess_name}"
+      tag="cc"
+      label="${claude_names}"
     elif [ -n "$opencode_found" ]; then
-      item="[tmux / opencode] ${win_names:-$sess_name}${meta_suffix}§${sess_name}"
+      tag="oc"
+      label="${win_names:-$sess_name}"
     else
-      item="[tmux] ${win_names:-$sess_name}${meta_suffix}§${sess_name}"
+      tag="--"
+      label="${win_names:-$sess_name}"
     fi
+    # Build right-side metadata: context cost age plan
+    meta_parts=""
+    [ -n "$context_info" ] && meta_parts="$context_info"
+    [ -n "$age_str" ] && meta_parts="${meta_parts:+$meta_parts }${age_str}"
+    [ -n "$plan_info" ] && meta_parts="${meta_parts:+$meta_parts }${plan_info}"
+    meta_col=""
+    [ -n "$meta_parts" ] && meta_col="  ${meta_parts}"
+    item="${tag} ${label}${meta_col}§${sess_name}"
     tmux_items="${tmux_items:+$tmux_items\n}$item"
   done < <("$TMUX_BIN" list-sessions -F "#{session_name} #{session_activity}" 2>/dev/null)
 
@@ -216,15 +222,14 @@ fi
 # defaults to flowen repl (AVE-aware opencode wrapper) — put it on top.
 new_options=""
 if [ -n "$TMUX_BIN" ] && command -v flowen >/dev/null 2>&1; then
-  new_options="[new] flowen repl (AVE-aware opencode)"
+  new_options="++ flowen repl"
 elif [ -n "$TMUX_BIN" ] && command -v opencode >/dev/null 2>&1; then
-  # Fallback when flowen wrapper isn't installed but opencode is.
-  new_options="[new] opencode (named tmux + opencode)"
+  new_options="++ opencode"
 fi
-[ -n "$TMUX_BIN" ] && new_options="${new_options:+$new_options\n}[new] claude (named tmux + claude)"
-new_options="${new_options:+$new_options\n}[new] Ghostty (plain shell)"
-[ -n "$TMUX_BIN" ] && new_options="$new_options\n[new] tmux"
-[ -n "$ZELLIJ_BIN" ] && new_options="$new_options\n[new] zellij"
+[ -n "$TMUX_BIN" ] && new_options="${new_options:+$new_options\n}++ claude"
+new_options="${new_options:+$new_options\n}++ shell"
+[ -n "$TMUX_BIN" ] && new_options="$new_options\n++ tmux"
+[ -n "$ZELLIJ_BIN" ] && new_options="$new_options\n++ zellij"
 
 if [ -n "$choices" ]; then
   choices="$new_options\n$choices"
@@ -247,7 +252,7 @@ trap 'rm -f "$CHOICES_FILE"' EXIT
 # Build the kill+reload command for fzf's --bind.
 # fzf passes selected lines via {+f} (file with selected items, one per line).
 # We read that file, kill matching tmux sessions, then re-exec the list builder.
-KILL_RELOAD_CMD="while IFS= read -r line; do case \"\$line\" in '[new]'*) continue ;; esac; sess=\${line##*§}; [ -z \"\$sess\" ] && continue; att=\$($TMUX_BIN display-message -p '#{session_name}' 2>/dev/null || true); [ \"\$sess\" = \"\$att\" ] && continue; $TMUX_BIN kill-session -t \"\$sess\" 2>/dev/null; done < {+f}; $0 --list-only"
+KILL_RELOAD_CMD="while IFS= read -r line; do case \"\$line\" in '++'*) continue ;; esac; sess=\${line##*§}; [ -z \"\$sess\" ] && continue; att=\$($TMUX_BIN display-message -p '#{session_name}' 2>/dev/null || true); [ \"\$sess\" = \"\$att\" ] && continue; $TMUX_BIN kill-session -t \"\$sess\" 2>/dev/null; done < {+f}; $0 --list-only"
 
 # --list-only: when called with this flag, just print the choices and exit
 # (used by fzf reload after kills). Detected at the top of the script below.
@@ -257,7 +262,7 @@ selected=$(cat "$CHOICES_FILE" | "$FZF_BIN" \
   --layout=reverse \
   --border=rounded \
   --prompt="session > " \
-  --header="enter=attach  tab=select  ctrl-x=kill session (ends conversation, frees RAM)" \
+  --header="enter=attach  tab=multi  ctrl-x=kill  oc=opencode cc=claude" \
   --no-info \
   --multi \
   --delimiter='§' \
@@ -274,12 +279,12 @@ selected=$(echo "$selected" | head -1)
 log "selected: $selected"
 
 case "$selected" in
-  "[new] Ghostty (plain shell)")
+  "++ shell")
     log "launching plain shell"
     cd_to_last_dir
     exec "$SHELL"
     ;;
-  "[new] zellij")
+  "++ zellij")
     printf "Session name (empty for default): " > /dev/tty
     read -r session_name < /dev/tty
     cd_to_last_dir
@@ -291,7 +296,7 @@ case "$selected" in
       exec "$ZELLIJ_BIN" -s "$session_name"
     fi
     ;;
-  "[new] tmux")
+  "++ tmux")
     name="ghostty-$$"
     if "$TMUX_BIN" has-session -t "$name" 2>/dev/null; then
       name="ghostty-$$-$(date +%H%M%S)"
@@ -305,7 +310,7 @@ case "$selected" in
     log "tmux new-session exited with code $rc"
     exec "$SHELL"
     ;;
-  "[new] claude (named tmux + claude)")
+  "++ claude")
     # One name shared across:
     #   - tmux session name
     #   - tmux window name (→ Ghostty title via set-titles)
@@ -354,7 +359,7 @@ case "$selected" in
     log "tmux new claude-session exited with code $rc"
     exec "$SHELL"
     ;;
-  "[new] flowen repl (AVE-aware opencode)"|"[new] opencode (named tmux + opencode)")
+  "++ flowen repl"|"++ opencode")
     # Mirror of the claude flow: one name spanning tmux session + window + the
     # @opencode-name user option. Default launcher is `flowen repl` (the
     # AVE-aware opencode wrapper that reads ~/.flowen/state.toml + agent.toml
@@ -409,31 +414,15 @@ case "$selected" in
     log "tmux new opencode-session exited with code $rc"
     exec "$SHELL"
     ;;
-  "[tmux / claude]"*|"[tmux / opencode]"*|"[tmux / claude+opencode]"*)
-    # All "agent-tagged" tmux sessions attach the same way — the tag is just a
-    # display hint for the picker. Session name comes after the § delimiter.
+  "oc "*|"cc "*|"cc+oc "*|"-- "*)
+    # All existing sessions — tag is just display. Session name after § delimiter.
     session_name="${selected##*§}"
-    log "attaching tmux (agent-tagged): $session_name"
+    log "attaching: $session_name"
     set +e
     "$TMUX_BIN" attach-session -t "$session_name" 2>>"$LOG_FILE"
     rc=$?
     log "tmux attach exited with code $rc"
     exec "$SHELL"
-    ;;
-  \[tmux\]\ *)
-    # Extract session name after § delimiter
-    session_name="${selected##*§}"
-    log "attaching tmux: $session_name"
-    set +e
-    "$TMUX_BIN" attach-session -t "$session_name" 2>>"$LOG_FILE"
-    rc=$?
-    log "tmux attach exited with code $rc"
-    exec "$SHELL"
-    ;;
-  \[zellij\]\ *)
-    session_name="${selected#\[zellij\] }"
-    log "attaching zellij: $session_name"
-    exec "$ZELLIJ_BIN" attach "$session_name"
     ;;
   *)
     log "unknown selection: $selected"

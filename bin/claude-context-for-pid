@@ -61,6 +61,6 @@ jq -s '
     | ($last.input_tok + $last.cache_read_tok + $last.cache_create_tok) as $current
     | ([$turns[] | .input_tok + .cache_read_tok + .cache_create_tok] | max) as $peak
     | ([$turns[] | turn_cost(.)] | add) as $cost
-    | "\(fmt_tokens($current)) ctx  $\($cost | . * 100 | floor / 100)"
+    | "\(fmt_tokens($current)) $\($cost | . * 100 | floor / 100)"
   end
 ' "$JSONL" 2>/dev/null | tr -d '"'
