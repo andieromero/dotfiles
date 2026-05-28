@@ -130,12 +130,19 @@ if [ -n "$TMUX_BIN" ]; then
     plan_val=$("$TMUX_BIN" show-options -t "$sess_name" -v "@flowen-plan" 2>/dev/null || true)
     [ -n "$plan_val" ] && plan_info="$plan_val"
 
-    # Check git status in session's working directory
+    # Check git status in session's working directory.
+    # Skip twin-andie brain repo — it's always dirty by design (captures, progress, etc).
     pane_path=$("$TMUX_BIN" display-message -t "$sess_name" -p '#{pane_current_path}' 2>/dev/null || true)
     if [ -n "$pane_path" ] && git -C "$pane_path" rev-parse --git-dir >/dev/null 2>&1; then
-      git_dirty=$(git -C "$pane_path" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
-      git_unpushed=$(git -C "$pane_path" log --oneline '@{upstream}..HEAD' 2>/dev/null | wc -l | tr -d ' ')
-      git_branch=$(git -C "$pane_path" branch --show-current 2>/dev/null || true)
+      repo_root=$(git -C "$pane_path" rev-parse --show-toplevel 2>/dev/null || true)
+      case "$repo_root" in
+        */twin-andie|*/twin-*) ;;  # skip brain repos — always dirty
+        *)
+          git_dirty=$(git -C "$pane_path" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+          git_unpushed=$(git -C "$pane_path" log --oneline '@{upstream}..HEAD' 2>/dev/null | wc -l | tr -d ' ')
+          git_branch=$(git -C "$pane_path" branch --show-current 2>/dev/null || true)
+          ;;
+      esac
     fi
 
     # Compute relative age from last activity
@@ -265,7 +272,11 @@ if [ -n "$TMUX_BIN" ]; then
     if [ -n "$meta_right" ]; then
       left_len=${#left_plain}
       right_len=${#meta_right}
-      total=72
+      # Detect terminal width; default to 72 for split screens
+      term_w=$(tput cols 2>/dev/null || echo 72)
+      total=$((term_w - 8))  # leave room for fzf chrome + pointer
+      [ "$total" -lt 40 ] && total=40
+      [ "$total" -gt 72 ] && total=72
       dots_len=$((total - left_len - right_len - 2))
       [ "$dots_len" -lt 2 ] && dots_len=2
       dots=$(printf '%*s' "$dots_len" '' | tr ' ' '·')
@@ -295,9 +306,9 @@ if [ -n "$TMUX_BIN" ] && command -v flowen >/dev/null 2>&1; then
 elif [ -n "$TMUX_BIN" ] && command -v opencode >/dev/null 2>&1; then
   new_options="++ codu builder"
 fi
+[ -n "$TMUX_BIN" ] && new_options="${new_options:+$new_options\n}++ tmux"
 [ -n "$TMUX_BIN" ] && new_options="${new_options:+$new_options\n}++ claude"
 new_options="${new_options:+$new_options\n}++ shell"
-[ -n "$TMUX_BIN" ] && new_options="$new_options\n++ tmux"
 [ -n "$ZELLIJ_BIN" ] && new_options="$new_options\n++ zellij"
 
 if [ -n "$choices" ]; then
@@ -331,40 +342,39 @@ FULL_DELETE_CMD="while IFS= read -r line; do case \"\$line\" in '++'*) continue 
 # --list-only: when called with this flag, just print the choices and exit
 # (used by fzf reload after kills). Detected at the top of the script below.
 # For now, show fzf with the pre-built list.
-TIPS_CMD="printf '%s\n' \
-  '' \
-  '   ╭── legend ──────────────────────────────────────────────────────╮' \
-  '   │  codu   codu builder session          ++   create new session │' \
-  '   │  cc     claude code session           --   plain shell / tmux │' \
-  '   │  \033[33m●\033[0m      uncommitted git changes           \033[36m↑\033[0m    unpushed commits │' \
-  '   ╰────────────────────────────────────────────────────────────────╯' \
-  '' \
-  '   ╭── context health ──────────────────────────────────────────────╮' \
-  '   │  \033[32m  88K\033[0m   green    healthy, full coherence                     │' \
-  '   │  \033[33m 150K\033[0m   yellow   getting large, consider /compact            │' \
-  '   │  \033[31m 272K\033[0m   red      degraded quality, slow + expensive          │' \
-  '   │  \$6     total cost for this session                           │' \
-  '   │  3d     time since last activity                              │' \
-  '   ╰────────────────────────────────────────────────────────────────╯' \
-  '' \
-  '   ╭── actions ─────────────────────────────────────────────────────╮' \
-  '   │                                                              │' \
-  '   │  ctrl-x   \033[33msafe kill\033[0m     ends process, frees RAM              │' \
-  '   │           conversation stays in DB, can resume later         │' \
-  '   │           use when: pausing work, freeing memory             │' \
-  '   │                                                              │' \
-  '   │  ctrl-d   \033[31mfull delete\033[0m   kills process + deletes conversation │' \
-  '   │           frees RAM + context + disk — cannot be undone      │' \
-  '   │           use when: session is stale (3d+), context >200K,   │' \
-  '   │           or you are done with this task entirely             │' \
-  '   │                                                              │' \
-  '   │  /compact (inside session)  shrinks context, keeps convo     │' \
-  '   │           use when: 100-200K tokens and still mid-task       │' \
-  '   │                                                              │' \
-  '   │  \033[33m●\033[0m = uncommitted changes — attach + commit before killing    │' \
-  '   │                                                              │' \
-  '   ╰────────────────────────────────────────────────────────────────╯' \
-  ''"
+G='\033[32m' Y='\033[33m' R='\033[31m' C='\033[36m' D='\033[2m' N='\033[0m'
+TIPS_CMD="echo -e \"\
+\n\
+  ${D}LEGEND${N}\n\
+  codu  codu builder     ++  new session\n\
+  cc    claude code      --  plain shell\n\
+  ${Y}●${N}     uncommitted     ${C}↑${N}   unpushed\n\
+\n\
+  ${D}CONTEXT${N}\n\
+  ${G}  88K  healthy${N}\n\
+  ${Y} 150K  consider /compact${N}\n\
+  ${R} 272K  degraded — compact or clear${N}\n\
+  \\\$6    session cost    3d   last active\n\
+\n\
+  ${D}ACTIONS${N}\n\
+  ${Y}ctrl-x${N}  safe kill\n\
+          ends process, frees RAM\n\
+          conversation stays, resume later\n\
+\n\
+  ${R}ctrl-d${N}  full delete ${D}(cannot undo)${N}\n\
+          kills + deletes conversation\n\
+          frees RAM + context + disk\n\
+\n\
+  ${D}/compact${N}  ${D}(type inside session)${N}\n\
+          shrinks context, keeps convo\n\
+          use at ${Y}100-200K${N} tokens mid-task\n\
+\n\
+  ${D}WHEN TO CLEAR VS COMPACT${N}\n\
+  ${Y}●${N} showing?  attach + commit first\n\
+  ${Y}100-200K${N}    /compact inside session\n\
+  ${R}>200K${N}       ctrl-d, start fresh\n\
+  ${D}stale 3d+${N}   ctrl-d to clean up\n\
+\""
 
 selected=$(cat "$CHOICES_FILE" | "$FZF_BIN" \
   --height=100% \
