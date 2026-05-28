@@ -182,15 +182,15 @@ if [ -n "$TMUX_BIN" ]; then
     done < <("$TMUX_BIN" list-windows -t "$sess_name" -F "#{window_name} #{pane_pid}" 2>/dev/null)
 
     # Compose compact label with dot-leader alignment.
-    # Tags: fl = flowen, cc = claude code, -- = plain shell
+    # Tags: cb = codu builder, cc = claude code, -- = plain shell
     if [ -n "$claude_names" ] && [ -n "$opencode_found" ]; then
-      tag="fl+cc"
+      tag="cb+cc"
       label="${claude_names}"
     elif [ -n "$claude_names" ]; then
       tag="cc"
       label="${claude_names}"
     elif [ -n "$opencode_found" ]; then
-      tag="fl"
+      tag="cb"
       label="${win_names:-$sess_name}"
     else
       tag="--"
@@ -232,9 +232,9 @@ fi
 # defaults to flowen repl (AVE-aware opencode wrapper) — put it on top.
 new_options=""
 if [ -n "$TMUX_BIN" ] && command -v flowen >/dev/null 2>&1; then
-  new_options="++ flowen repl"
+  new_options="++ codu builder"
 elif [ -n "$TMUX_BIN" ] && command -v opencode >/dev/null 2>&1; then
-  new_options="++ opencode"
+  new_options="++ codu builder"
 fi
 [ -n "$TMUX_BIN" ] && new_options="${new_options:+$new_options\n}++ claude"
 new_options="${new_options:+$new_options\n}++ shell"
@@ -272,7 +272,7 @@ selected=$(cat "$CHOICES_FILE" | "$FZF_BIN" \
   --layout=reverse \
   --border=rounded \
   --prompt="session > " \
-  --header="enter·attach  tab·multi  ctrl-x·kill  │  fl=flowen  cc=claude  --=shell  ++=new" \
+  --header="enter·attach  tab·multi  ctrl-x·kill  │  cb=codu  cc=claude  --=shell  ++=new" \
   --no-info \
   --multi \
   --delimiter='§' \
@@ -369,7 +369,7 @@ case "$selected" in
     log "tmux new claude-session exited with code $rc"
     exec "$SHELL"
     ;;
-  "++ flowen repl"|"++ opencode")
+  "++ codu builder")
     # Mirror of the claude flow: one name spanning tmux session + window + the
     # @opencode-name user option. Default launcher is `flowen repl` (the
     # AVE-aware opencode wrapper that reads ~/.flowen/state.toml + agent.toml
@@ -424,7 +424,7 @@ case "$selected" in
     log "tmux new opencode-session exited with code $rc"
     exec "$SHELL"
     ;;
-  "fl "*|"cc "*|"fl+cc "*|"-- "*)
+  "cb "*|"cc "*|"cb+cc "*|"-- "*)
     # All existing sessions — tag is just display. Session name after § delimiter.
     session_name="${selected##*§}"
     log "attaching: $session_name"
