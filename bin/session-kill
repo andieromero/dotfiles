@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# session-kill: full cleanup of a tmux session + its agent's context.
+#
+# 1. Find the agent (opencode/claude) running in the tmux session
+# 2. Resolve it to a DB session ID (opencode sqlite / claude JSONL)
+# 3. Kill the tmux session (frees RAM)
+# 4. Delete the agent session from the DB (frees context + disk)
+#
+# Usage: session-kill <tmux-session-name>
+# Called by the session picker's ctrl-x bind.
+
+set -euo pipefail
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"
+
+SESS="${1:-}"
+[ -z "$SESS" ] && exit 1
+
+TMUX_BIN="${TMUX_BIN:-$(command -v tmux 2>/dev/null || echo /opt/homebrew/bin/tmux)}"
+OC_DB="$HOME/.local/share/opencode/opencode.db"
+LOG_FILE="${GHOSTTY_SESSION_PICKER_LOG:-$HOME/.local/share/ghostty-session-picker.log}"
+
+log() {
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [session-kill] $*" >> "$LOG_FILE"
+}
+
+# --- Step 1: find agent PID in this tmux session ---
+oc_pid=""
+claude_pid=""
+pane_pid=$("$TMUX_BIN" list-windows -t "$SESS" -F "#{pane_pid}" 2>/dev/null | head -1)
+
+if [ -n "$pane_pid" ]; then
+  for cpid in $(ps -eo pid,ppid 2>/dev/null | awk -v p="$pane_pid" '$2==p {print $1}'); do
+    cmd=$(ps -p "$cpid" -o command= 2>/dev/null || true)
+    case "$cmd" in
+      *opencode*)
+        oc_pid="$cpid"
+        break
+        ;;
+    esac
+    if [ -f "$HOME/.claude/sessions/$cpid.json" ]; then
+      claude_pid="$cpid"
+      break
+    fi
+  done
+fi
+
+# --- Step 2: resolve to session ID ---
+oc_session_id=""
+if [ -n "$oc_pid" ] && [ -f "$OC_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
+  # Check -s flag first
+  cmd=$(ps -p "$oc_pid" -o command= 2>/dev/null || true)
+  case "$cmd" in
+    *-s\ ses_*) oc_session_id=$(echo "$cmd" | grep -o 'ses_[^ ]*') ;;
+  esac
+
+  # Fallback: match by process start time
+  if [ -z "$oc_session_id" ]; then
+    lstart=$(ps -p "$oc_pid" -o lstart= 2>/dev/null | xargs || true)
+    if [ -n "$lstart" ]; then
+      epoch_s=$(date -j -f "%a %b %d %T %Y" "$lstart" +%s 2>/dev/null || true)
+      if [ -n "$epoch_s" ]; then
+        epoch_ms=$((epoch_s * 1000))
+        oc_session_id=$(sqlite3 "$OC_DB" "
+          SELECT id FROM session
+          WHERE ABS(time_created - $epoch_ms) < 120000
+          AND time_archived IS NULL
+          ORDER BY ABS(time_created - $epoch_ms)
+          LIMIT 1;
+        " 2>/dev/null || true)
+      fi
+    fi
+  fi
+fi
+
+# --- Step 3: kill tmux session (frees RAM) ---
+log "killing tmux session '$SESS' (oc_pid=$oc_pid, oc_session=$oc_session_id)"
+"$TMUX_BIN" kill-session -t "$SESS" 2>/dev/null || true
+
+# --- Step 4: delete agent session from DB (frees context + disk) ---
+if [ -n "$oc_session_id" ] && command -v opencode >/dev/null 2>&1; then
+  log "deleting opencode session $oc_session_id"
+  opencode session delete "$oc_session_id" 2>/dev/null || true
+fi
+
+# Claude Code: delete the session JSONL (optional — they're small)
+if [ -n "$claude_pid" ] && [ -f "$HOME/.claude/sessions/$claude_pid.json" ]; then
+  session_id=$(jq -r '.sessionId // empty' "$HOME/.claude/sessions/$claude_pid.json" 2>/dev/null || true)
+  if [ -n "$session_id" ]; then
+    log "cleaning claude session files for $session_id"
+    # Remove session pid file
+    rm -f "$HOME/.claude/sessions/$claude_pid.json"
+    # Remove JSONL transcripts
+    for pdir in "$HOME/.claude/projects"/*/; do
+      rm -f "${pdir}${session_id}.jsonl" 2>/dev/null
+    done
+  fi
+fi
+
+log "session '$SESS' fully cleaned"

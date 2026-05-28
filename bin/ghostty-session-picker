@@ -277,26 +277,49 @@ trap 'rm -f "$CHOICES_FILE"' EXIT
 # Build the kill+reload command for fzf's --bind.
 # fzf passes selected lines via {+f} (file with selected items, one per line).
 # We read that file, kill matching tmux sessions, then re-exec the list builder.
-KILL_RELOAD_CMD="while IFS= read -r line; do case \"\$line\" in '++'*) continue ;; esac; sess=\${line##*§}; [ -z \"\$sess\" ] && continue; att=\$($TMUX_BIN display-message -p '#{session_name}' 2>/dev/null || true); [ \"\$sess\" = \"\$att\" ] && continue; $TMUX_BIN kill-session -t \"\$sess\" 2>/dev/null; done < {+f}; $0 --list-only"
+SESSION_KILL="$HOME/.local/bin/session-kill"
+KILL_RELOAD_CMD="while IFS= read -r line; do case \"\$line\" in '++'*) continue ;; esac; sess=\${line##*§}; [ -z \"\$sess\" ] && continue; att=\$($TMUX_BIN display-message -p '#{session_name}' 2>/dev/null || true); [ \"\$sess\" = \"\$att\" ] && continue; $SESSION_KILL \"\$sess\" 2>/dev/null; done < {+f}; $0 --list-only"
 
 # --list-only: when called with this flag, just print the choices and exit
 # (used by fzf reload after kills). Detected at the top of the script below.
 # For now, show fzf with the pre-built list.
-HEADER=$(printf '%s\n%s\n%s' \
-  'enter·attach  tab·multi  ctrl-x·kill' \
-  'codu=codu builder  cc=claude  --=shell  ++=new' \
-  '>200K? /compact inside · stale? ctrl-x to free RAM')
+TIPS_CMD="printf '%s\n' \
+  '' \
+  '  LEGEND' \
+  '  codu  codu builder session       ++  new session' \
+  '  cc    claude code session        --  plain shell' \
+  '' \
+  '  KEYS' \
+  '  enter   attach to session        tab     multi-select' \
+  '  ctrl-x  kill + delete context    esc     cancel' \
+  '' \
+  '  COLUMNS                          WHAT CTRL-X DOES' \
+  '  150K  context tokens             kills process (frees RAM)' \
+  '  \$6    total session cost         deletes conversation (frees context)' \
+  '  3d    last activity              session history is gone' \
+  '' \
+  '  BEST PRACTICES' \
+  '  >200K tokens?  /compact inside the session to shrink context' \
+  '  stale (3d+)?   tab to select, ctrl-x to clean up' \
+  '  fresh start?   ctrl-x old session, ++ new, pick same plan' \
+  ''"
 
 selected=$(cat "$CHOICES_FILE" | "$FZF_BIN" \
-  --height=~60% \
+  --height=80% \
   --layout=reverse \
   --border=rounded \
+  --border-label=' sessions ' \
+  --border-label-pos=2 \
   --prompt="session > " \
-  --header="$HEADER" \
+  --header='enter·attach  tab·multi  ctrl-x·kill' \
   --no-info \
   --multi \
   --delimiter='§' \
   --with-nth=1 \
+  --preview="$TIPS_CMD" \
+  --preview-window='down,40%,wrap,border-rounded' \
+  --preview-label=' guide ' \
+  --preview-label-pos=2 \
   --bind "ctrl-x:execute-silent($KILL_RELOAD_CMD)+reload($0 --list-only)" \
   --bind "ctrl-d:execute-silent($KILL_RELOAD_CMD)+reload($0 --list-only)" \
   --color=pointer:green,prompt:blue,header:dim) || {
