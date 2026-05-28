@@ -355,6 +355,13 @@ TIPS_CMD="echo -e \"\
   ${R} 272K  degraded — compact or clear${N}\n\
   \\\$6    session cost    3d   last active\n\
 \n\
+  ${D}IDLE SESSIONS COST \\\$0${N}\n\
+  the \\\$ amount is what was ${D}already spent${N}\n\
+  idle sessions make zero API calls\n\
+  they only use ${Y}~200MB RAM${N} per session\n\
+  cost resumes when you send a message:\n\
+  ${G}<100K${N} ~\\\$0.06/msg  ${Y}200K${N} ~\\\$0.30/msg  ${R}500K${N} ~\\\$2/msg\n\
+\n\
   ${D}ACTIONS${N}\n\
   ${Y}ctrl-x${N}  safe kill\n\
           ends process, frees RAM\n\
