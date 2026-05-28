@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# claude-context-for-pid — given a Claude Code PID, emit a compact context
+# usage string like "142K/200K ctx  $0.83". Fast enough for fzf preview/reload.
+#
+# Usage: claude-context-for-pid <pid>
+# Output: "142K/200K ctx  $0.83"  (or empty string if no data found)
+
+set -euo pipefail
+
+PID="${1:-}"
+[ -z "$PID" ] && exit 0
+
+SESSIONS_DIR="$HOME/.claude/sessions"
+PROJECTS_DIR="$HOME/.claude/projects"
+
+# Step 1: PID → sessionId via sessions/<pid>.json
+SESSION_JSON="$SESSIONS_DIR/$PID.json"
+[ -f "$SESSION_JSON" ] || exit 0
+
+SESSION_ID=$(jq -r '.sessionId // empty' "$SESSION_JSON" 2>/dev/null)
+[ -z "$SESSION_ID" ] && exit 0
+
+# Step 2: find the JSONL transcript in any project dir
+JSONL=""
+for pdir in "$PROJECTS_DIR"/*/; do
+  candidate="${pdir}${SESSION_ID}.jsonl"
+  if [ -f "$candidate" ]; then
+    JSONL="$candidate"
+    break
+  fi
+done
+[ -z "$JSONL" ] && exit 0
+
+# Step 3: extract last assistant turn's usage (peak context = input + cache_read + cache_create)
+# and sum total cost across all turns. Use jq -s for speed on typical session sizes.
+jq -s '
+  def fmt_tokens(n):
+    if n >= 1000000 then "\(n / 1000000 | . * 10 | floor / 10)M"
+    elif n >= 1000 then "\(n / 1000 | floor)K"
+    else "\(n)"
+    end;
+
+  def turn_cost(t):
+    ({"claude-opus-4-7":[15,75],"claude-opus-4-7[1m]":[15,75],"claude-opus-4-6":[15,75],"claude-opus-4-5":[15,75],"claude-sonnet-4-6":[3,15],"claude-sonnet-4-5":[3,15],"claude-haiku-4-5":[0.80,4]}[t.model] // [3,15]) as $p
+    | ((t.input_tok * $p[0]) + (t.output_tok * $p[1]) + (t.cache_read_tok * $p[0] * 0.1) + (t.cache_create_tok * $p[0] * 1.25)) / 1000000;
+
+  [ .[]
+    | select(.type == "assistant" and .message.usage != null)
+    | {
+        model: (.message.model // "unknown"),
+        input_tok: (.message.usage.input_tokens // 0),
+        output_tok: (.message.usage.output_tokens // 0),
+        cache_read_tok: (.message.usage.cache_read_input_tokens // 0),
+        cache_create_tok: (.message.usage.cache_creation_input_tokens // 0)
+      }
+  ] as $turns
+  |
+  if ($turns | length) == 0 then ""
+  else
+    ($turns[-1]) as $last
+    | ($last.input_tok + $last.cache_read_tok + $last.cache_create_tok) as $current
+    | ([$turns[] | .input_tok + .cache_read_tok + .cache_create_tok] | max) as $peak
+    | ([$turns[] | turn_cost(.)] | add) as $cost
+    | "\(fmt_tokens($current)) ctx  $\($cost | . * 100 | floor / 100)"
+  end
+' "$JSONL" 2>/dev/null | tr -d '"'

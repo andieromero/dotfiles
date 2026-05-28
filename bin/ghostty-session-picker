@@ -21,9 +21,23 @@ if [ -z "$FZF_BIN" ]; then
   exec "$SHELL"
 fi
 
+CONTEXT_BIN="$HOME/.local/bin/claude-context-for-pid"
+
+# --list-only: called by fzf reload after kill. Rebuild choices, print, exit.
+# This re-execs the list-building logic without launching fzf again.
+LIST_ONLY=0
+if [ "${1:-}" = "--list-only" ]; then
+  LIST_ONLY=1
+fi
+
 log() {
   echo "$(date '+%Y-%m-%d %H:%M:%S') [$$] $*" >> "$LOG_FILE"
 }
+
+export TMUX_BIN ZELLIJ_BIN LOG_FILE
+
+# --- Early bypass and queue consumers: skip in --list-only mode ---
+if [ "$LIST_ONLY" -eq 0 ]; then
 
 # --- Early bypass: FLOWEN_TAB_ON_OPEN=1 skips fzf entirely ---
 # When set in the parent shell, every new ghostty tab/window opens straight
@@ -60,6 +74,8 @@ if [ -s "$LAUNCH_QUEUE" ] && command -v jq >/dev/null 2>&1 && [ -x "$HOME/.confi
   log "launch-queue: non-empty — exec'ing flowen-tab-launcher (pops queue)"
   exec "$HOME/.config/bin/flowen-tab-launcher"
 fi
+
+fi  # end LIST_ONLY == 0 guard
 
 # Restore last working directory
 cd_to_last_dir() {
@@ -100,6 +116,7 @@ if [ -n "$TMUX_BIN" ]; then
     claude_names=""
     opencode_found=""
     win_names=""
+    context_info=""
 
     while IFS= read -r wline; do
       # Format: window_name pane_pid
@@ -117,6 +134,11 @@ if [ -n "$TMUX_BIN" ]; then
           fi
           [ -z "$cname" ] && cname="$win_name"
           claude_names="${claude_names:+$claude_names, }$cname"
+          # Grab context stats for this Claude process
+          if [ -x "$CONTEXT_BIN" ]; then
+            ctx=$("$CONTEXT_BIN" "$cpid" 2>/dev/null || true)
+            [ -n "$ctx" ] && context_info="$ctx"
+          fi
           continue
         fi
         # opencode: detect by process name (no per-session JSON file like claude has).
@@ -129,10 +151,13 @@ if [ -n "$TMUX_BIN" ]; then
     done < <("$TMUX_BIN" list-windows -t "$sess_name" -F "#{window_name} #{pane_pid}" 2>/dev/null)
 
     # Compose tag — both runtimes can coexist; pick the most specific label.
+    # Append context stats (tokens + cost) when available for Claude sessions.
+    ctx_suffix=""
+    [ -n "$context_info" ] && ctx_suffix="  [$context_info]"
     if [ -n "$claude_names" ] && [ -n "$opencode_found" ]; then
-      item="[tmux / claude+opencode] ${claude_names}§${sess_name}"
+      item="[tmux / claude+opencode] ${claude_names}${ctx_suffix}§${sess_name}"
     elif [ -n "$claude_names" ]; then
-      item="[tmux / claude] ${claude_names}§${sess_name}"
+      item="[tmux / claude] ${claude_names}${ctx_suffix}§${sess_name}"
     elif [ -n "$opencode_found" ]; then
       item="[tmux / opencode] ${win_names:-$sess_name}§${sess_name}"
     else
@@ -172,20 +197,44 @@ else
   choices="$new_options"
 fi
 
-# Show fzf picker
-selected=$(echo -e "$choices" | "$FZF_BIN" \
+# --list-only: just print the refreshed choices for fzf reload, then exit.
+if [ "$LIST_ONLY" -eq 1 ]; then
+  echo -e "$choices"
+  exit 0
+fi
+
+# Write choices to a temp file so fzf reload can regenerate the list after kills.
+# The regeneration re-runs this script's list-building logic via a helper.
+CHOICES_FILE=$(mktemp /tmp/ghostty-picker-XXXXXX)
+echo -e "$choices" > "$CHOICES_FILE"
+trap 'rm -f "$CHOICES_FILE"' EXIT
+
+# Build the kill+reload command for fzf's --bind.
+# fzf passes selected lines via {+f} (file with selected items, one per line).
+# We read that file, kill matching tmux sessions, then re-exec the list builder.
+KILL_RELOAD_CMD="while IFS= read -r line; do case \"\$line\" in '[new]'*) continue ;; esac; sess=\${line##*§}; [ -z \"\$sess\" ] && continue; att=\$($TMUX_BIN display-message -p '#{session_name}' 2>/dev/null || true); [ \"\$sess\" = \"\$att\" ] && continue; $TMUX_BIN kill-session -t \"\$sess\" 2>/dev/null; done < {+f}; $0 --list-only"
+
+# --list-only: when called with this flag, just print the choices and exit
+# (used by fzf reload after kills). Detected at the top of the script below.
+# For now, show fzf with the pre-built list.
+selected=$(cat "$CHOICES_FILE" | "$FZF_BIN" \
   --height=~50% \
   --layout=reverse \
   --border=rounded \
   --prompt="session > " \
-  --header="Select a session or create new" \
+  --header="enter=attach  tab=select  ctrl-x/ctrl-d=kill" \
   --no-info \
+  --multi \
   --delimiter='§' \
   --with-nth=1 \
+  --bind "ctrl-x:execute-silent($KILL_RELOAD_CMD)+reload($0 --list-only)" \
+  --bind "ctrl-d:execute-silent($KILL_RELOAD_CMD)+reload($0 --list-only)" \
   --color=pointer:green,prompt:blue,header:dim) || {
   # If fzf is cancelled (Esc/Ctrl-C), start plain shell
   exec "$SHELL"
 }
+# In multi-select mode, take only the first selected line for attach/launch
+selected=$(echo "$selected" | head -1)
 
 log "selected: $selected"
 
@@ -248,7 +297,7 @@ case "$selected" in
     # (claude-tmux-sync) sees it. Then run claude inside the named session.
     "$TMUX_BIN" new-session -d -s "$name" -n "$name" 2>>"$LOG_FILE"
     "$TMUX_BIN" set-option -t "$name" "@claude-name" "$name" 2>>"$LOG_FILE"
-    "$TMUX_BIN" send-keys -t "$name" "claude" Enter 2>>"$LOG_FILE"
+    "$TMUX_BIN" send-keys -t "$name" "claude --model claude-opus-4-6" Enter 2>>"$LOG_FILE"
     "$TMUX_BIN" attach-session -t "$name" 2>>"$LOG_FILE"
     rc=$?
     log "tmux new claude-session exited with code $rc"
