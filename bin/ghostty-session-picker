@@ -182,31 +182,46 @@ if [ -n "$TMUX_BIN" ]; then
     done < <("$TMUX_BIN" list-windows -t "$sess_name" -F "#{window_name} #{pane_pid}" 2>/dev/null)
 
     # Compose compact label with dot-leader alignment.
-    # Tags: cb = codu builder, cc = claude code, -- = plain shell
+    # Tags: codu = codu builder, cc = claude code, -- = plain shell
     if [ -n "$claude_names" ] && [ -n "$opencode_found" ]; then
-      tag="cb+cc"
+      tag="codu+cc"
       label="${claude_names}"
     elif [ -n "$claude_names" ]; then
       tag="cc"
       label="${claude_names}"
     elif [ -n "$opencode_found" ]; then
-      tag="cb"
+      tag="codu"
       label="${win_names:-$sess_name}"
     else
       tag="--"
       label="${win_names:-$sess_name}"
     fi
-    # Build right-side metadata columns
+    # Build fixed-width right columns: tokens(5) cost(4) age(3)
+    # Format: "codu name ·········· 272K $27 3d"
+    col_tok=""
+    col_cost=""
+    col_age=""
+    if [ -n "$context_info" ]; then
+      # context_info is like "272K  $27.44" — split into token + cost
+      col_tok=$(echo "$context_info" | awk '{print $1}')
+      col_cost=$(echo "$context_info" | awk '{c=$2; gsub(/\.[0-9]*$/,"",c); if(c=="$0") c="<$1"; print c}')
+    fi
+    [ -n "$age_str" ] && col_age=$(echo "$age_str" | sed 's/ ago//')
+    # Compose right side with fixed widths
     meta_right=""
-    [ -n "$context_info" ] && meta_right="$context_info"
-    [ -n "$age_str" ] && meta_right="${meta_right:+$meta_right  }${age_str}"
-    [ -n "$plan_info" ] && meta_right="${meta_right:+$meta_right  }${plan_info}"
-    # Format: "oc name ··········· 272K  $27  3d ago"
+    [ -n "$col_tok" ] && meta_right=$(printf '%5s' "$col_tok")
+    [ -n "$col_cost" ] && meta_right="${meta_right} $(printf '%-4s' "$col_cost")"
+    [ -n "$col_age" ] && meta_right="${meta_right:+$meta_right }$(printf '%-3s' "$col_age")"
+    # If only age (no context), just show age right-aligned
+    if [ -z "$col_tok" ] && [ -n "$col_age" ]; then
+      meta_right="$col_age"
+    fi
+    [ -n "$plan_info" ] && meta_right="${meta_right:+$meta_right }${plan_info}"
     left="${tag} ${label}"
     if [ -n "$meta_right" ]; then
       left_len=${#left}
       right_len=${#meta_right}
-      total=76  # target width (leave room for fzf chrome)
+      total=72
       dots_len=$((total - left_len - right_len - 2))
       [ "$dots_len" -lt 2 ] && dots_len=2
       dots=$(printf '%*s' "$dots_len" '' | tr ' ' '·')
@@ -267,12 +282,17 @@ KILL_RELOAD_CMD="while IFS= read -r line; do case \"\$line\" in '++'*) continue 
 # --list-only: when called with this flag, just print the choices and exit
 # (used by fzf reload after kills). Detected at the top of the script below.
 # For now, show fzf with the pre-built list.
+HEADER=$(printf '%s\n%s\n%s' \
+  'enter·attach  tab·multi  ctrl-x·kill' \
+  'codu=codu builder  cc=claude  --=shell  ++=new' \
+  '>200K? /compact inside · stale? ctrl-x to free RAM')
+
 selected=$(cat "$CHOICES_FILE" | "$FZF_BIN" \
-  --height=~50% \
+  --height=~60% \
   --layout=reverse \
   --border=rounded \
   --prompt="session > " \
-  --header="enter·attach  tab·multi  ctrl-x·kill  │  cb=codu  cc=claude  --=shell  ++=new" \
+  --header="$HEADER" \
   --no-info \
   --multi \
   --delimiter='§' \
@@ -424,7 +444,7 @@ case "$selected" in
     log "tmux new opencode-session exited with code $rc"
     exec "$SHELL"
     ;;
-  "cb "*|"cc "*|"cb+cc "*|"-- "*)
+  "codu "*|"cc "*|"codu+cc "*|"-- "*)
     # All existing sessions — tag is just display. Session name after § delimiter.
     session_name="${selected##*§}"
     log "attaching: $session_name"
