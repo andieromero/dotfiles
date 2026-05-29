@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# codu-session-track: record git activity for the current tmux session.
+# Called after git operations (commit, checkout, push) to maintain
+# per-session state at ~/.flowen/sessions/<session-name>.json.
+#
+# Usage:
+#   codu-session-track                    # auto-detect: snapshot current git state
+#   codu-session-track commit <sha>       # record a commit
+#   codu-session-track checkout <branch>  # record a branch switch
+#   codu-session-track push <remote>      # record a push
+#
+# State file shape:
+# {
+#   "session": "mc-beta",
+#   "created": "2026-05-29T01:00:00Z",
+#   "updated": "2026-05-29T02:30:00Z",
+#   "repos": {
+#     "/Users/x/Flowen/twin-andie": {
+#       "branches": ["main", "feat/mc-beta"],
+#       "current_branch": "feat/mc-beta",
+#       "commits": 5,
+#       "last_commit": "abc1234",
+#       "dirty": 3,
+#       "unpushed": 1,
+#       "last_push": "2026-05-29T02:00:00Z"
+#     }
+#   }
+# }
+
+set -euo pipefail
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"
+
+# Must be inside tmux
+[ -z "${TMUX:-}" ] && exit 0
+
+SESSIONS_DIR="$HOME/.flowen/sessions"
+mkdir -p "$SESSIONS_DIR"
+
+SESSION_NAME=$(tmux display-message -p '#{session_name}' 2>/dev/null || exit 0)
+STATE_FILE="$SESSIONS_DIR/${SESSION_NAME}.json"
+NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+# Get current git state
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
+[ -z "$REPO_ROOT" ] && exit 0
+
+BRANCH=$(git branch --show-current 2>/dev/null || echo "detached")
+DIRTY=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+UNPUSHED=$(git log --oneline '@{upstream}..HEAD' 2>/dev/null | wc -l | tr -d ' ')
+LAST_COMMIT=$(git log --oneline -1 --format='%h' 2>/dev/null || echo "none")
+TOTAL_COMMITS=$(git log --oneline --since="$(date -u -v-30d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)" 2>/dev/null | wc -l | tr -d ' ')
+
+# Action from args
+ACTION="${1:-snapshot}"
+ACTION_DETAIL="${2:-}"
+
+# Create or update the state file
+if [ -f "$STATE_FILE" ] && command -v jq >/dev/null 2>&1; then
+  # Update existing state
+  jq --arg repo "$REPO_ROOT" \
+     --arg branch "$BRANCH" \
+     --arg dirty "$DIRTY" \
+     --arg unpushed "$UNPUSHED" \
+     --arg last_commit "$LAST_COMMIT" \
+     --arg commits "$TOTAL_COMMITS" \
+     --arg now "$NOW" \
+     --arg action "$ACTION" \
+     --arg detail "$ACTION_DETAIL" '
+    .updated = $now |
+    .repos[$repo].current_branch = $branch |
+    .repos[$repo].dirty = ($dirty | tonumber) |
+    .repos[$repo].unpushed = ($unpushed | tonumber) |
+    .repos[$repo].commits = ($commits | tonumber) |
+    .repos[$repo].last_commit = $last_commit |
+    .repos[$repo].branches = (
+      (.repos[$repo].branches // []) |
+      if index($branch) then . else . + [$branch] end
+    ) |
+    if $action == "push" then
+      .repos[$repo].last_push = $now
+    else . end
+  ' "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+else
+  # Create new state file
+  if command -v jq >/dev/null 2>&1; then
+    jq -n \
+      --arg session "$SESSION_NAME" \
+      --arg created "$NOW" \
+      --arg updated "$NOW" \
+      --arg repo "$REPO_ROOT" \
+      --arg branch "$BRANCH" \
+      --arg dirty "$DIRTY" \
+      --arg unpushed "$UNPUSHED" \
+      --arg last_commit "$LAST_COMMIT" \
+      --arg commits "$TOTAL_COMMITS" '{
+      session: $session,
+      created: $created,
+      updated: $updated,
+      repos: {
+        ($repo): {
+          branches: [$branch],
+          current_branch: $branch,
+          commits: ($commits | tonumber),
+          last_commit: $last_commit,
+          dirty: ($dirty | tonumber),
+          unpushed: ($unpushed | tonumber)
+        }
+      }
+    }' > "$STATE_FILE"
+  fi
+fi

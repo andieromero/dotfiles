@@ -96,4 +96,7 @@ if [ -n "$claude_pid" ] && [ -f "$HOME/.claude/sessions/$claude_pid.json" ]; the
   fi
 fi
 
+# --- Step 5: clean up session state file ---
+rm -f "$HOME/.flowen/sessions/${SESS}.json" 2>/dev/null
+
 log "session '$SESS' fully cleaned"

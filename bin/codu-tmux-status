@@ -48,6 +48,9 @@ fi
 if [ "$SIDE" = "right" ]; then
   [ -z "${TMUX:-}" ] && exit 0
 
+  # Update session state file (piggyback on 5s status refresh)
+  "$HOME/.local/bin/codu-session-track" snapshot 2>/dev/null &
+
   pane_pid=$(tmux display-message -p '#{pane_pid}' 2>/dev/null) || exit 0
 
   # Walk children of pane to find agent process

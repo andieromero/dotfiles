@@ -130,12 +130,27 @@ if [ -n "$TMUX_BIN" ]; then
     plan_val=$("$TMUX_BIN" show-options -t "$sess_name" -v "@codu-plan" 2>/dev/null || true)
     [ -n "$plan_val" ] && plan_info="$plan_val"
 
-    # Check git status in session's working directory
-    pane_path=$("$TMUX_BIN" display-message -t "$sess_name" -p '#{pane_current_path}' 2>/dev/null || true)
-    if [ -n "$pane_path" ] && git -C "$pane_path" rev-parse --git-dir >/dev/null 2>&1; then
-      git_branch=$(git -C "$pane_path" branch --show-current 2>/dev/null || true)
-      git_dirty=$(git -C "$pane_path" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
-      git_unpushed=$(git -C "$pane_path" log --oneline '@{upstream}..HEAD' 2>/dev/null | wc -l | tr -d ' ')
+    # Read session state file for git info (updated every 5s by codu-tmux-status)
+    SESSION_STATE="$HOME/.flowen/sessions/${sess_name}.json"
+    if [ -f "$SESSION_STATE" ] && command -v jq >/dev/null 2>&1; then
+      # Aggregate across all repos this session has touched
+      git_branch=$(jq -r '[.repos[].current_branch] | join(",")' "$SESSION_STATE" 2>/dev/null || true)
+      git_dirty=$(jq '[.repos[].dirty] | add // 0' "$SESSION_STATE" 2>/dev/null || echo 0)
+      git_unpushed=$(jq '[.repos[].unpushed] | add // 0' "$SESSION_STATE" 2>/dev/null || echo 0)
+      all_branches=$(jq -r '[.repos[].branches[]] | unique | join(",")' "$SESSION_STATE" 2>/dev/null || true)
+      repo_count=$(jq '.repos | length' "$SESSION_STATE" 2>/dev/null || echo 0)
+      # Show all branches if session touched multiple
+      if [ "$repo_count" -gt 1 ] 2>/dev/null || [ "$(echo "$all_branches" | tr ',' '\n' | wc -l | tr -d ' ')" -gt 1 ] 2>/dev/null; then
+        git_branch="$all_branches"
+      fi
+    else
+      # Fallback: live git check
+      pane_path=$("$TMUX_BIN" display-message -t "$sess_name" -p '#{pane_current_path}' 2>/dev/null || true)
+      if [ -n "$pane_path" ] && git -C "$pane_path" rev-parse --git-dir >/dev/null 2>&1; then
+        git_branch=$(git -C "$pane_path" branch --show-current 2>/dev/null || true)
+        git_dirty=$(git -C "$pane_path" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+        git_unpushed=$(git -C "$pane_path" log --oneline '@{upstream}..HEAD' 2>/dev/null | wc -l | tr -d ' ')
+      fi
     fi
 
     # Compute relative age from last activity
