@@ -114,6 +114,7 @@ if [ -n "$TMUX_BIN" ]; then
   # Both runtimes can coexist in different panes of the same tmux session, so
   # we capture each independently and the tag reflects whichever (or both) we find.
   now_epoch=$(date +%s)
+  SEEN_REPOS_FILE=$(mktemp /tmp/ghostty-picker-repos-XXXXXX)
   while IFS= read -r sess_line; do
     sess_name="${sess_line%% *}"
     sess_activity="${sess_line##* }"
@@ -133,9 +134,19 @@ if [ -n "$TMUX_BIN" ]; then
     # Check git status in session's working directory
     pane_path=$("$TMUX_BIN" display-message -t "$sess_name" -p '#{pane_current_path}' 2>/dev/null || true)
     if [ -n "$pane_path" ] && git -C "$pane_path" rev-parse --git-dir >/dev/null 2>&1; then
-      git_dirty=$(git -C "$pane_path" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
-      git_unpushed=$(git -C "$pane_path" log --oneline '@{upstream}..HEAD' 2>/dev/null | wc -l | tr -d ' ')
       git_branch=$(git -C "$pane_path" branch --show-current 2>/dev/null || true)
+      # Only compute dirty/unpushed per unique repo+branch combo.
+      # Multiple sessions on the same repo+branch share git state — showing
+      # the same count on each is noise. Dedupe by repo root + branch.
+      repo_root=$(git -C "$pane_path" rev-parse --show-toplevel 2>/dev/null || true)
+      repo_key="${repo_root}:${git_branch}"
+      # Use a temp file to track seen repo+branch combos (bash assoc arrays
+      # aren't available in all shells this runs under)
+      if ! grep -qxF "$repo_key" "$SEEN_REPOS_FILE" 2>/dev/null; then
+        echo "$repo_key" >> "$SEEN_REPOS_FILE"
+        git_dirty=$(git -C "$pane_path" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+        git_unpushed=$(git -C "$pane_path" log --oneline '@{upstream}..HEAD' 2>/dev/null | wc -l | tr -d ' ')
+      fi
     fi
 
     # Compute relative age from last activity
@@ -250,28 +261,38 @@ if [ -n "$TMUX_BIN" ]; then
       meta_colored="$col_age"
     fi
     [ -n "$plan_info" ] && meta_right="${meta_right:+$meta_right }${plan_info}" && meta_colored="${meta_colored:+$meta_colored }${plan_info}"
-    # Git status suffix: ●3 = 3 uncommitted files, ↑2 = 2 unpushed commits
+    # Git info: branch + dirty/unpushed indicators
+    # Only show dirty/unpushed on first session per repo+branch (deduped above)
     git_suffix=""
     git_suffix_plain=""
-    if [ "$git_dirty" -gt 0 ] 2>/dev/null && [ "$git_unpushed" -gt 0 ] 2>/dev/null; then
-      git_suffix=" \033[33m●${git_dirty}\033[0m \033[36m↑${git_unpushed}\033[0m"
-      git_suffix_plain=" ●${git_dirty} ↑${git_unpushed}"
-    elif [ "$git_dirty" -gt 0 ] 2>/dev/null; then
-      git_suffix=" \033[33m●${git_dirty}\033[0m"
-      git_suffix_plain=" ●${git_dirty}"
-    elif [ "$git_unpushed" -gt 0 ] 2>/dev/null; then
-      git_suffix=" \033[36m↑${git_unpushed}\033[0m"
-      git_suffix_plain=" ↑${git_unpushed}"
+    # Short branch: strip feat/ prefix, truncate to 20 chars
+    branch_short=""
+    if [ -n "$git_branch" ]; then
+      branch_short=$(echo "$git_branch" | sed 's|^feat/||;s|^fix/||' | cut -c1-20)
     fi
+    # Build suffix parts
+    parts=""
+    parts_plain=""
+    if [ -n "$branch_short" ]; then
+      parts="\033[2m${branch_short}\033[0m"
+      parts_plain="${branch_short}"
+    fi
+    if [ "$git_dirty" -gt 0 ] 2>/dev/null; then
+      parts="${parts:+$parts }\033[33m●${git_dirty}\033[0m"
+      parts_plain="${parts_plain:+$parts_plain }●${git_dirty}"
+    fi
+    if [ "$git_unpushed" -gt 0 ] 2>/dev/null; then
+      parts="${parts:+$parts }\033[36m↑${git_unpushed}\033[0m"
+      parts_plain="${parts_plain:+$parts_plain }↑${git_unpushed}"
+    fi
+    [ -n "$parts" ] && git_suffix=" ${parts}" && git_suffix_plain=" ${parts_plain}"
     left="${tag} ${label}${git_suffix}"
     left_plain="${tag} ${label}${git_suffix_plain}"
     if [ -n "$meta_right" ]; then
       left_len=${#left_plain}
       right_len=${#meta_right}
-      # Fit to terminal width; hscroll handles overflow
-      term_w=$(tput cols 2>/dev/null || echo 72)
-      total=$((term_w - 8))  # leave room for fzf chrome + pointer
-      [ "$total" -lt 40 ] && total=40
+      # Fixed width for consistent dot leaders — hscroll handles overflow
+      total=68
       dots_len=$((total - left_len - right_len - 2))
       [ "$dots_len" -lt 2 ] && dots_len=2
       dots=$(printf '%*s' "$dots_len" '' | tr ' ' '·')
@@ -322,7 +343,7 @@ fi
 # The regeneration re-runs this script's list-building logic via a helper.
 CHOICES_FILE=$(mktemp /tmp/ghostty-picker-XXXXXX)
 echo -e "$choices" > "$CHOICES_FILE"
-trap 'rm -f "$CHOICES_FILE"' EXIT
+trap 'rm -f "$CHOICES_FILE" "$SEEN_REPOS_FILE"' EXIT
 
 # Kill commands for fzf --bind.
 # fzf passes selected lines via {+f} (file with selected items, one per line).
@@ -390,13 +411,14 @@ selected=$(cat "$CHOICES_FILE" | "$FZF_BIN" \
   --header='enter·attach  tab·multi  ctrl-x·kill  ctrl-d·delete' \
   --ansi \
   --hscroll-off=10 \
+  --scrollbar='▐' \
   --no-info \
   --multi \
   --delimiter='§' \
   --with-nth=1 \
   --preview="$TIPS_CMD" \
   --preview-window='down,50%,border-rounded' \
-  --preview-label=' guide ' \
+  --preview-label=' code guide ' \
   --preview-label-pos=2 \
   --bind "ctrl-x:execute-silent($SAFE_KILL_CMD)+reload($0 --list-only)" \
   --bind "ctrl-d:execute-silent($FULL_DELETE_CMD)+reload($0 --list-only)" \
