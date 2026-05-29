@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# flowen-plan-picker: fzf-based plan selector for session startup.
+# codu-plan-picker: fzf-based plan selector for session startup.
 # Returns the selected plan name (slug) on stdout, or empty if skipped.
 #
 # Usage:
-#   plan=$(flowen-plan-picker)
+#   plan=$(codu-plan-picker)
 #   # Returns e.g. "flowen-os-mission-control-beta" or "" if user hit Esc
 #
 # Shows in-progress plans sorted by priority, with progress % and next task.

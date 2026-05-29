@@ -7,7 +7,7 @@ set -euo pipefail
 # Ghostty execs this script via `command =` with the bare macOS PATH (it does
 # not source zshrc/zprofile). Prepend the locations where flowen / opencode /
 # tmux / fzf actually live so `command -v` checks below succeed. Without this,
-# the `[new] flowen repl` option silently drops out of the picker because
+# the `[new] codu builder` option silently drops out of the picker because
 # `command -v flowen` returns false even though the binary is installed.
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"
 
@@ -22,7 +22,7 @@ if [ -z "$FZF_BIN" ]; then
 fi
 
 CLAUDE_CONTEXT_BIN="$HOME/.local/bin/claude-context-for-pid"
-OC_CONTEXT_BIN="$HOME/.local/bin/opencode-context-for-pid"
+CODU_CONTEXT_BIN="$HOME/.local/bin/codu-context-for-pid"
 
 # --list-only: called by fzf reload after kill. Rebuild choices, print, exit.
 # This re-execs the list-building logic without launching fzf again.
@@ -40,13 +40,13 @@ export TMUX_BIN ZELLIJ_BIN LOG_FILE
 # --- Early bypass and queue consumers: skip in --list-only mode ---
 if [ "$LIST_ONLY" -eq 0 ]; then
 
-# --- Early bypass: FLOWEN_TAB_ON_OPEN=1 skips fzf entirely ---
+# --- Early bypass: CODU_TAB_ON_OPEN=1 skips fzf entirely ---
 # When set in the parent shell, every new ghostty tab/window opens straight
-# into a fresh flowen repl session. Unset for the next launch to restore the
-# picker. Honors FLOWEN_TAB_NAME for explicit naming.
-if [ "${FLOWEN_TAB_ON_OPEN:-0}" = "1" ] && [ -x "$HOME/.config/bin/flowen-tab-launcher" ]; then
-  log "FLOWEN_TAB_ON_OPEN=1 — bypassing picker, exec'ing flowen-tab-launcher"
-  exec "$HOME/.config/bin/flowen-tab-launcher"
+# into a fresh codu builder session. Unset for the next launch to restore the
+# picker. Honors CODU_TAB_NAME for explicit naming.
+if [ "${CODU_TAB_ON_OPEN:-0}" = "1" ] && [ -x "$HOME/.config/bin/codu-tab-launcher" ]; then
+  log "CODU_TAB_ON_OPEN=1 — bypassing picker, exec'ing codu-tab-launcher"
+  exec "$HOME/.config/bin/codu-tab-launcher"
 fi
 
 # --- Queue consumers (Phase B.1/B.2 consumer side) ---
@@ -54,9 +54,9 @@ fi
 # ~/.flowen/*.queue. Picker checks both on startup; first hit wins.
 # Producer/consumer decoupling means MC doesn't need IPC with this process;
 # it just appends a JSON line and the next ghostty tab/window picks it up.
-FLOWEN_QUEUE_DIR="$HOME/.flowen"
-LAUNCH_QUEUE="$FLOWEN_QUEUE_DIR/pending-launches.queue"
-ATTACH_QUEUE="$FLOWEN_QUEUE_DIR/pending-attaches.queue"
+CODU_QUEUE_DIR="$HOME/.flowen"
+LAUNCH_QUEUE="$CODU_QUEUE_DIR/pending-launches.queue"
+ATTACH_QUEUE="$CODU_QUEUE_DIR/pending-attaches.queue"
 
 # Attach queue takes priority over launch queue: if user explicitly asked to
 # resume an existing session, that intent supersedes a stale launch.
@@ -69,11 +69,11 @@ if [ -s "$ATTACH_QUEUE" ] && command -v jq >/dev/null 2>&1 && [ -n "$TMUX_BIN" ]
   fi
 fi
 
-if [ -s "$LAUNCH_QUEUE" ] && command -v jq >/dev/null 2>&1 && [ -x "$HOME/.config/bin/flowen-tab-launcher" ]; then
-  # Name is consumed by flowen-tab-launcher itself (see its queue logic).
+if [ -s "$LAUNCH_QUEUE" ] && command -v jq >/dev/null 2>&1 && [ -x "$HOME/.config/bin/codu-tab-launcher" ]; then
+  # Name is consumed by codu-tab-launcher itself (see its queue logic).
   # We just exec it; the launcher's own queue-pop happens there.
-  log "launch-queue: non-empty — exec'ing flowen-tab-launcher (pops queue)"
-  exec "$HOME/.config/bin/flowen-tab-launcher"
+  log "launch-queue: non-empty — exec'ing codu-tab-launcher (pops queue)"
+  exec "$HOME/.config/bin/codu-tab-launcher"
 fi
 
 fi  # end LIST_ONLY == 0 guard
@@ -110,15 +110,15 @@ if [ -n "$TMUX_BIN" ]; then
   tmux_items=""
 
   # Group by session: for each session, find the best label.
-  # Priority: Claude/opencode tag > first window name > session name.
-  # Both runtimes can coexist in different panes of the same tmux session, so
-  # we capture each independently and the tag reflects whichever (or both) we find.
+  # Priority: Claude/codu tag > first window name > session name.
+    # Both runtimes can coexist in different panes of the same tmux session, so
+    # we capture each independently and the tag reflects whichever (or both) we find.
   now_epoch=$(date +%s)
   while IFS= read -r sess_line; do
     sess_name="${sess_line%% *}"
     sess_activity="${sess_line##* }"
     claude_names=""
-    opencode_found=""
+    codu_found=""
     win_names=""
     context_info=""
     plan_info=""
@@ -127,7 +127,7 @@ if [ -n "$TMUX_BIN" ]; then
     git_branch=""
 
     # Check for plan attached to this session
-    plan_val=$("$TMUX_BIN" show-options -t "$sess_name" -v "@flowen-plan" 2>/dev/null || true)
+    plan_val=$("$TMUX_BIN" show-options -t "$sess_name" -v "@codu-plan" 2>/dev/null || true)
     [ -n "$plan_val" ] && plan_info="$plan_val"
 
     # Check git status in session's working directory
@@ -159,7 +159,7 @@ if [ -n "$TMUX_BIN" ]; then
       pane_pid="${wline##* }"
       win_names="${win_names:+$win_names, }$win_name"
 
-      # Walk this pane's descendants once; check each child for claude or opencode.
+      # Walk this pane's descendants once; check each child for claude or codu builder.
       for cpid in $(ps -eo pid,ppid 2>/dev/null | awk -v p="$pane_pid" '$2==p {print $1}'); do
         # Claude Code: has a session JSON under ~/.claude/sessions/<pid>.json
         if [ -d "$SESSIONS_DIR" ] && [ -f "$SESSIONS_DIR/$cpid.json" ]; then
@@ -176,15 +176,15 @@ if [ -n "$TMUX_BIN" ]; then
           fi
           continue
         fi
-        # opencode: detect by process name (no per-session JSON file like claude has).
+        # codu builder: detect by process name (no per-session JSON file like claude has).
         # The TUI binary is `opencode` in its argv[0]. Check the command field.
         ccmd=$(ps -p "$cpid" -o command= 2>/dev/null)
         case "$ccmd" in
           *opencode*)
-            opencode_found=1
-            # Grab context stats for this opencode process
-            if [ -x "$OC_CONTEXT_BIN" ]; then
-              ctx=$("$OC_CONTEXT_BIN" "$cpid" 2>/dev/null || true)
+            codu_found=1
+            # Grab context stats for this codu builder process
+            if [ -x "$CODU_CONTEXT_BIN" ]; then
+              ctx=$("$CODU_CONTEXT_BIN" "$cpid" 2>/dev/null || true)
               [ -n "$ctx" ] && context_info="$ctx"
             fi
             ;;
@@ -194,13 +194,13 @@ if [ -n "$TMUX_BIN" ]; then
 
     # Compose compact label with dot-leader alignment.
     # Tags: codu = codu builder, cc = claude code, -- = plain shell
-    if [ -n "$claude_names" ] && [ -n "$opencode_found" ]; then
+    if [ -n "$claude_names" ] && [ -n "$codu_found" ]; then
       tag="codu+cc"
       label="${claude_names}"
     elif [ -n "$claude_names" ]; then
       tag="cc"
       label="${claude_names}"
-    elif [ -n "$opencode_found" ]; then
+    elif [ -n "$codu_found" ]; then
       tag="codu"
       label="${win_names:-$sess_name}"
     else
@@ -304,7 +304,7 @@ fi
 # New session options.
 # Order matters: fzf's default cursor lands on the first row, so the first
 # option here is the one a fresh terminal opens with a single Enter. Andie
-# defaults to flowen repl (AVE-aware opencode wrapper) — put it on top.
+# defaults to codu builder — put it on top.
 new_options=""
 if [ -n "$TMUX_BIN" ] && command -v flowen >/dev/null 2>&1; then
   new_options="++ codu builder"
@@ -468,7 +468,7 @@ case "$selected" in
     #   - claude session name (via @claude-name tmux option, honored by claude-tmux-sync)
     # Plan picker: select an in-progress plan or skip for a blank session.
     plan_name=""
-    PLAN_PICKER="$HOME/.local/bin/flowen-plan-picker"
+    PLAN_PICKER="$HOME/.local/bin/codu-plan-picker"
     if [ -x "$PLAN_PICKER" ]; then
       plan_name=$("$PLAN_PICKER" < /dev/tty 2>/dev/tty || true)
     fi
@@ -484,7 +484,7 @@ case "$selected" in
     # Collision guard: a duplicate-session error from `tmux new-session` is
     # silently fatal — without this check, the script falls through to send-keys
     # + attach against the EXISTING session, which (if it's running a different
-    # runtime) types `claude` into that runtime's prompt. Mirror flowen-start.
+    # runtime) types `claude` into that runtime's prompt. Mirror codu-start.
     if "$TMUX_BIN" has-session -t "$name" 2>/dev/null; then
       orig_name="$name"
       name="${name}-$(date +%H%M%S)"
@@ -498,7 +498,7 @@ case "$selected" in
     # (claude-tmux-sync) sees it. Then run claude inside the named session.
     "$TMUX_BIN" new-session -d -s "$name" -n "$name" 2>>"$LOG_FILE"
     "$TMUX_BIN" set-option -t "$name" "@claude-name" "$name" 2>>"$LOG_FILE"
-    [ -n "$plan_name" ] && "$TMUX_BIN" set-option -t "$name" "@flowen-plan" "$plan_name" 2>>"$LOG_FILE"
+    [ -n "$plan_name" ] && "$TMUX_BIN" set-option -t "$name" "@codu-plan" "$plan_name" 2>>"$LOG_FILE"
     "$TMUX_BIN" send-keys -t "$name" "claude --model claude-opus-4-6" Enter 2>>"$LOG_FILE"
     # If a plan was selected, send /dispatch after a brief delay for claude to boot
     if [ -n "$plan_name" ]; then
@@ -512,8 +512,8 @@ case "$selected" in
     ;;
   "++ codu builder")
     # Mirror of the claude flow: one name spanning tmux session + window + the
-    # @opencode-name user option. Default launcher is `flowen repl` (the
-    # AVE-aware opencode wrapper that reads ~/.flowen/state.toml + agent.toml
+    # @codu-name user option. Default launcher is `flowen repl` (the
+    # AVE-aware codu builder wrapper that reads ~/.flowen/state.toml + agent.toml
     # for venture-specific context overlay). Fallback to raw `opencode --agent flowen`
     # when the flowen CLI isn't on PATH (covers fresh-machine bootstrap before
     # flowen-poc is uv-installed).
@@ -526,7 +526,7 @@ case "$selected" in
     # If a plan is selected, the plan slug becomes the session name and
     # /dispatch <plan> is sent as the first message after the agent starts.
     plan_name=""
-    PLAN_PICKER="$HOME/.local/bin/flowen-plan-picker"
+    PLAN_PICKER="$HOME/.local/bin/codu-plan-picker"
     if [ -x "$PLAN_PICKER" ]; then
       plan_name=$("$PLAN_PICKER" < /dev/tty 2>/dev/tty || true)
     fi
@@ -537,7 +537,7 @@ case "$selected" in
       read -r raw_name < /dev/tty
     fi
     name=$(printf '%s' "$raw_name" | tr -c 'A-Za-z0-9_-' '-' | sed 's/^-*//;s/-*$//')
-    [ -z "$name" ] && name="flowen-$$"
+    [ -z "$name" ] && name="codu-$$"
     # Collision guard — see claude branch for the why. Critical here: if a
     # claude-running session already owns this name, attaching + send-keys would
     # type `flowen repl` straight into the claude TUI's prompt.
@@ -548,12 +548,12 @@ case "$selected" in
       printf "Session '%s' exists — using '%s' instead.\n" "$orig_name" "$name" > /dev/tty
     fi
     cd_to_last_dir
-    log "launching new opencode tmux session: $name (raw: $raw_name, plan: $plan_name, launcher: $launcher)"
+    log "launching new codu builder tmux session: $name (raw: $raw_name, plan: $plan_name, launcher: $launcher)"
     set +e
     "$TMUX_BIN" new-session -d -s "$name" -n "$name" 2>>"$LOG_FILE"
-    "$TMUX_BIN" set-option -t "$name" "@opencode-name" "$name" 2>>"$LOG_FILE"
+    "$TMUX_BIN" set-option -t "$name" "@codu-name" "$name" 2>>"$LOG_FILE"
     # Store plan name as tmux user option so status bar + future tools can read it
-    [ -n "$plan_name" ] && "$TMUX_BIN" set-option -t "$name" "@flowen-plan" "$plan_name" 2>>"$LOG_FILE"
+    [ -n "$plan_name" ] && "$TMUX_BIN" set-option -t "$name" "@codu-plan" "$plan_name" 2>>"$LOG_FILE"
     "$TMUX_BIN" send-keys -t "$name" "$launcher" Enter 2>>"$LOG_FILE"
     # If a plan was selected, send /dispatch after a brief delay for the agent to boot
     if [ -n "$plan_name" ]; then
@@ -562,7 +562,7 @@ case "$selected" in
     fi
     "$TMUX_BIN" attach-session -t "$name" 2>>"$LOG_FILE"
     rc=$?
-    log "tmux new opencode-session exited with code $rc"
+    log "tmux new codu-session exited with code $rc"
     exec "$SHELL"
     ;;
   "codu "*|"cc "*|"codu+cc "*|"-- "*)
@@ -591,7 +591,7 @@ case "$selected" in
           cmd=$(ps -p "$cpid" -o command= 2>/dev/null || true)
           case "$cmd" in
             *opencode*)
-              fork_type="opencode"
+              fork_type="codu"
               # Extract -s session ID if present
               oc_sid=$(echo "$cmd" | grep -o '\-s ses_[^ ]*' | sed 's/-s //' || true)
               if [ -z "$oc_sid" ]; then
@@ -618,7 +618,7 @@ case "$selected" in
       # Fallback if we couldn't detect
       if [ -z "$fork_cmd" ]; then
         fork_cmd="opencode --agent flowen --fork -c"
-        fork_type="opencode"
+        fork_type="codu"
       fi
       # Create new tmux session named <old>-fork
       new_name="${session_name}-fork"

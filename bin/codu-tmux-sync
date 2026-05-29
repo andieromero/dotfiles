@@ -1,27 +1,27 @@
 #!/usr/bin/env bash
-# opencode-tmux-sync: rename the current tmux SESSION + window to match the
-# active opencode session's name. Mirror of claude-tmux-sync, adapted for
-# opencode's state model.
+# codu-tmux-sync: rename the current tmux SESSION + window to match the
+# active codu builder session's name. Mirror of claude-tmux-sync, adapted for
+# codu builder's state model.
 #
 # STATUS (2026-05-13): INERT HOOK-BAIT.
 #   - opencode v1.14.x has no `/rename` equivalent and no session-JSON sidecar
 #     parallel to ~/.claude/sessions/<pid>.json. There is no event today that
 #     would fire this script to pick up a name change.
-#   - The script does honor the @opencode-name tmux user-option (set by
-#     ghostty-session-picker's `[new] flowen repl` handler), so running it
+#   - The script does honor the @codu-name tmux user-option (set by
+#     ghostty-session-picker's `[new] codu builder` handler), so running it
 #     manually after that picker flow does work — it re-asserts the name.
 #   - The shape is here so when opencode SHIPS a rename-equivalent (TUI command
 #     or background event), only ONE thing needs to change: wire the new event
 #     to call this script. Naming priority below pre-bakes the upgrade path.
 #
 # Usage:
-#   1. Manual: opencode-tmux-sync (run in any tmux pane to re-sync from
-#      @opencode-name OR ~/.local/share/opencode session files OR cwd basename)
+#   1. Manual: codu-tmux-sync (run in any tmux pane to re-sync from
+#      @codu-name OR ~/.local/share/opencode session files OR cwd basename)
 #   2. FUTURE: opencode SessionStart / SessionRename hook (when those exist)
 #
 # Naming priority (when active hook-bait wires up):
-#   1. tmux user option @opencode-name (set by ghostty-session-picker
-#      `[new] flowen repl` and by flowen-tab-launcher)
+#   1. tmux user option @codu-name (set by ghostty-session-picker
+#      `[new] codu builder` and by codu-tab-launcher)
 #   2. FUTURE: .name field from an opencode session JSON when opencode adds one
 #   3. cwd basename (fallback)
 
@@ -47,17 +47,17 @@ rename_all() {
   tmux rename-window "$new_name" 2>/dev/null || true
 }
 
-# --- Priority 1: @opencode-name tmux user option ---
-# Set by ghostty-session-picker `[new] flowen repl` and by flowen-tab-launcher.
+# --- Priority 1: @codu-name tmux user option ---
+# Set by ghostty-session-picker `[new] codu builder` and by codu-tab-launcher.
 # This is the ONLY active rename path today. If unset, the script no-ops — it
 # does NOT fall back to cwd basename because:
 #   - claude-tmux-sync uses cwd-basename as fallback because Claude has no
-#     per-session name unless /rename is called. For opencode, no
-#     @opencode-name means "this session was not created by the picker, so
+#     per-session name unless /rename is called. For codu builder, no
+#     @codu-name means "this session was not created by the picker, so
 #     don't claim authority over its name."
 #   - Inert-when-unset preserves user-set tmux names (e.g. `dev-setup`,
-#     `flowen-mc`) that came from elsewhere.
-forced=$(tmux show-options -v "@opencode-name" 2>/dev/null || true)
+#     `codu-mc`) that came from elsewhere.
+forced=$(tmux show-options -v "@codu-name" 2>/dev/null || true)
 if [ -n "$forced" ]; then
   rename_all "$forced"
   exit 0
@@ -72,10 +72,10 @@ fi
 # a parseable schema, the parsing logic here gets filled in.
 OC_SESSION_DIR="$HOME/.local/share/opencode/storage/session"
 if [ -d "$OC_SESSION_DIR" ] && [ "${OPENCODE_TMUX_SYNC_VERBOSE:-0}" = "1" ]; then
-  echo "opencode-tmux-sync: $OC_SESSION_DIR exists; no parser wired (opencode v1.14 has no per-PID name sidecar)" >&2
+  echo "codu-tmux-sync: $OC_SESSION_DIR exists; no parser wired (opencode v1.14 has no per-PID name sidecar)" >&2
 fi
 
-# No @opencode-name + no session JSON parser = no-op exit.
+# No @codu-name + no session JSON parser = no-op exit.
 # When opencode ships a rename event, the wire-up is: future event handler
 # fires this script, picks up the new name via the future Priority 2 path.
 exit 0

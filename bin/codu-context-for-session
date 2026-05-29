@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# opencode-context-for-session — given an opencode session ID (or "latest"),
+# codu-context-for-session — given a codu builder session ID (or "latest"),
 # emit a compact context usage string like "142K ctx  $0.83  opus4.6"
 #
 # Usage:
-#   opencode-context-for-session <session-id>
-#   opencode-context-for-session latest
+#   codu-context-for-session <session-id>
+#   codu-context-for-session latest
 # Output: "142K ctx  $0.83  opus4.6"  (or empty string if no data)
 
 set -euo pipefail
@@ -12,20 +12,20 @@ set -euo pipefail
 SESSION_ID="${1:-}"
 [ -z "$SESSION_ID" ] && exit 0
 
-OC_DB="$HOME/.local/share/opencode/opencode.db"
-[ -f "$OC_DB" ] || exit 0
+CODU_DB="$HOME/.local/share/opencode/opencode.db"
+[ -f "$CODU_DB" ] || exit 0
 command -v sqlite3 >/dev/null 2>&1 || exit 0
 
 # Resolve "latest" to the most recently updated non-archived session
 if [ "$SESSION_ID" = "latest" ]; then
-  SESSION_ID=$(sqlite3 "$OC_DB" "
+  SESSION_ID=$(sqlite3 "$CODU_DB" "
     SELECT id FROM session WHERE time_archived IS NULL
     ORDER BY time_updated DESC LIMIT 1;
   " 2>/dev/null || true)
   [ -z "$SESSION_ID" ] && exit 0
 fi
 
-result=$(sqlite3 "$OC_DB" "
+result=$(sqlite3 "$CODU_DB" "
   SELECT
     MAX(json_extract(data, '$.tokens.total')) as peak_ctx,
     SUM(json_extract(data, '$.cost')) as total_cost,

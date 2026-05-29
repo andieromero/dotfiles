@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# flowen-start <issue-number> [<repo>]
+# codu-start <issue-number> [<repo>]
 #
-# Kicks off a flowen repl session bound to a GitHub issue. Mirror of
-# claude-start, adapted for opencode's tool model:
-#   - opencode controls allowed tools via ~/.flowen/agent.toml (not per-call flags)
-#   - so flowen-start is mostly a context-loader + tmux orchestrator
+# Kicks off a codu builder session bound to a GitHub issue. Mirror of
+# claude-start, adapted for codu builder's tool model:
+#   - codu builder controls allowed tools via ~/.flowen/agent.toml (not per-call flags)
+#   - so codu-start is mostly a context-loader + tmux orchestrator
 #
 # Usage:
-#   flowen-start 128                    # current repo
-#   flowen-start 128 Flowen-AI/flowen-os  # explicit repo
+#   codu-start 128                    # current repo
+#   codu-start 128 Flowen-AI/flowen-os  # explicit repo
 #
 # Behavior:
 #   1. Fetches issue title + body via `gh issue view`
 #   2. Creates a named tmux session `issue-<N>`
-#   3. Launches `flowen repl` inside it
+#   3. Launches `flowen repl` (codu builder) inside it
 #   4. After ~2s settle, pipes the issue context as the first prompt
 #   5. Attaches you to the session
 #
@@ -22,15 +22,15 @@
 
 set -euo pipefail
 
-issue="${1:?usage: flowen-start <issue-number> [<repo>]}"
+issue="${1:?usage: codu-start <issue-number> [<repo>]}"
 repo="${2:-}"
 
 if ! command -v gh >/dev/null 2>&1; then
-  echo "flowen-start: gh CLI not found (brew install gh)" >&2
+  echo "codu-start: gh CLI not found (brew install gh)" >&2
   exit 1
 fi
 if ! command -v flowen >/dev/null 2>&1; then
-  echo "flowen-start: flowen CLI not found — falling back to raw opencode" >&2
+  echo "codu-start: flowen CLI not found — falling back to raw opencode" >&2
   LAUNCHER="opencode --agent flowen"
 else
   LAUNCHER="flowen repl"
@@ -42,7 +42,7 @@ GH_ARGS=("issue" "view" "$issue" "--json" "title,body,url")
 [ -n "$repo" ] && GH_ARGS+=("--repo" "$repo")
 
 if ! ISSUE_JSON=$(gh "${GH_ARGS[@]}" 2>&1); then
-  echo "flowen-start: failed to fetch issue #$issue" >&2
+  echo "codu-start: failed to fetch issue #$issue" >&2
   echo "$ISSUE_JSON" >&2
   exit 1
 fi
@@ -57,15 +57,15 @@ if "$TMUX_BIN" has-session -t "$name" 2>/dev/null; then
   name="issue-$issue-$(date +%H%M%S)"
 fi
 
-echo "flowen-start: launching '$name' for $ISSUE_URL — $ISSUE_TITLE"
+echo "codu-start: launching '$name' for $ISSUE_URL — $ISSUE_TITLE"
 
 # Create + name + launch
 "$TMUX_BIN" new-session -d -s "$name" -n "$name" 2>/dev/null
-"$TMUX_BIN" set-option -t "$name" "@opencode-name" "$name" 2>/dev/null
+"$TMUX_BIN" set-option -t "$name" "@codu-name" "$name" 2>/dev/null
 "$TMUX_BIN" send-keys -t "$name" "$LAUNCHER" Enter 2>/dev/null
 
 # Wait for the TUI to come up before piping the prompt. 2s is conservative
-# for opencode's TUI init. If your machine is slower, bump FLOWEN_START_SETTLE.
+# for codu builder's TUI init. If your machine is slower, bump FLOWEN_START_SETTLE.
 sleep "${FLOWEN_START_SETTLE:-2}"
 
 # Compose the kickoff prompt. Templated for issue-driven work; edit to taste.

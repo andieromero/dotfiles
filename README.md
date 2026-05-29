@@ -148,29 +148,33 @@ AI coding sessions accumulate context (conversation history) that affects respon
 Every new Ghostty window/tab opens an fzf-based session picker. Also available inside tmux with `prefix S`.
 
 ```
-session > pick a session or create new
-  enter=attach  tab=select  ctrl-x=kill session (ends conversation, frees RAM)
-
-  [new] flowen repl (AVE-aware opencode)
-  [new] claude (named tmux + claude)
-  [new] Ghostty (plain shell)
-  [new] tmux
-  [tmux / opencode] mc-beta         (272K ctx  $27.44  3d ago  plan:flowen-os-mission-control-beta)
-  [tmux / opencode] mvp-revisions   (279K ctx  $27.69  now)
-  [tmux / opencode] pdf-change      (34K ctx   $0.26   6d ago)
-  [tmux] fed                        (1d ago)
+┌ sessions ──────────────────────────────────────────────────────────┐
+│ session >                                                         │
+│ enter·attach  ctrl-w·wrap  ctrl-f·fork  ctrl-x·kill  ctrl-d·delete│
+│                                                                   │
+│ ++ codu builder                                                   │
+│ ++ tmux                                                           │
+│ ++ claude                                                         │
+│ ++ shell                                                          │
+│ codu mc-beta feat/mc-beta ●3 ··········  272K $27  3d             │
+│ codu mvp-revisions main ···············  279K $27  now            │
+│ -- fed main ·······································  1d           │
+├ code guide ────────────────────────────────────────────────────────┤
+│  LEGEND / CONTEXT / ACTIONS / BEST PRACTICES                     │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
 Each session shows:
-- **Runtime**: `opencode`, `claude`, `claude+opencode`, or plain `tmux`
-- **Context**: `272K ctx` = 272,000 tokens of conversation history the model processes on every message
-- **Cost**: `$27.44` = total API spend for this session's lifetime
-- **Age**: `3d ago` = last activity was 3 days ago
-- **Plan**: `plan:flowen-os-mission-control-beta` = the flowen plan this session is working on
+- **Runtime**: `codu` = codu builder, `cc` = claude code, `--` = plain shell
+- **Branch**: git branch name (dimmed, truncated)
+- **Git status**: `●3` = 3 uncommitted files (yellow), `↑2` = 2 unpushed commits (cyan)
+- **Context**: `272K` = 272,000 tokens of conversation history (green/yellow/red by health)
+- **Cost**: `$27` = total API spend for this session's lifetime
+- **Age**: `3d` = last activity was 3 days ago
 
 ### Starting a New Session
 
-When you pick `[new] flowen repl` or `[new] claude`, a **plan picker** appears:
+When you pick `++ codu builder` or `++ claude`, a **plan picker** appears:
 
 ```
 plan > pick a plan to work on (esc = skip)
@@ -225,19 +229,32 @@ The **context number** (e.g., `272K ctx`) is the size of the conversation histor
 
 ### Actions Explained
 
-**Kill session** (`ctrl-x` in picker):
-- Ends the conversation permanently — context is gone from live memory
-- Frees RAM (the agent process dies)
-- Session history stays in the database (opencode sqlite / Claude JSONL) — browsable but not resumable as a live conversation
-- Next time you work on the same plan, start a new session — fresh context, same task scope
+**`ctrl-w` — Wrap + attach** (safest way to close):
+- Opens the session and runs `/wrap` automatically
+- `/wrap` commits + pushes code, runs `/learn` to extract patterns, writes a handoff doc
+- Ensures nothing is lost before you kill
 
-**Compact** (`/compact` inside the agent):
-- Summarizes the conversation history into a shorter form
-- Keeps the session alive with compressed context — you continue where you left off
-- Use this when you want to keep working but the session is getting slow/expensive
+**`ctrl-f` — Fork session**:
+- Creates a new session branched from the old conversation
+- Original session stays untouched
+- Use when you want to explore a different direction without losing context
+
+**`ctrl-x` — Safe kill** (process only):
+- Ends the process, frees RAM
+- Conversation stays in the database — can resume later
+- Use when pausing work or freeing memory
+
+**`ctrl-d` — Full delete** (cannot undo):
+- Kills process AND deletes conversation from the database
+- Frees RAM + context + disk
+- Use when done with a task, session is stale, or context too degraded
+
+**`/wrap`** (type inside the session):
+- Commits + pushes code to branch, runs `/learn`, writes handoff, compacts context
+- Always `/wrap` before killing a session with unsaved work
 
 **Start fresh on the same plan**:
-- Kill the old session, open a new one, pick the same plan
+- `ctrl-d` the old session, `++ codu builder`, pick the same plan
 - You get a clean 0-token context with the plan's `/dispatch` loaded automatically
 - The plan file itself is the persistent memory — the conversation doesn't need to be
 
@@ -251,20 +268,24 @@ Over time, sessions accumulate. Good practice:
 4. `ctrl-x` to kill them all at once — the list reloads with survivors
 5. The currently-attached session is protected from accidental kill
 
-**How much RAM am I using?** Each opencode process pair (node wrapper + native binary) uses 80-500MB depending on conversation size. 10 stale sessions can easily eat 1-2GB.
+**How much RAM am I using?** Each codu builder process pair uses 80-500MB depending on conversation size. 10 stale sessions can easily eat 1-2GB.
+
+**Do idle sessions cost money?** No. The `$` shown is already spent. Idle sessions make zero API calls — only RAM is consumed. Cost resumes when you send a new message.
 
 ### Scripts Reference
 
 | Script | Purpose |
 |--------|---------|
 | `ghostty-session-picker` | fzf session picker — runs on every new Ghostty window/tab, also via `prefix S` |
-| `flowen-plan-picker` | fzf plan picker — called by session picker when creating new agent sessions |
-| `flowen-tmux-status` | Generates tmux status bar content (AVE + plan + context + cost) |
-| `claude-context-for-pid` | Given a Claude Code PID, reads JSONL transcript and emits `142K ctx  $0.83` |
-| `opencode-context-for-pid` | Given an opencode PID, matches to sqlite session and emits context stats |
-| `opencode-context-for-session` | Direct opencode session ID lookup for context stats |
+| `codu-plan-picker` | fzf plan picker — called by session picker when creating new codu builder sessions |
+| `codu-tmux-status` | Generates tmux status bar content (AVE + plan + context + cost) |
+| `codu-context-for-pid` | Given a codu builder PID, matches to sqlite session and emits context stats |
+| `codu-context-for-session` | Direct codu builder session ID lookup for context stats |
+| `claude-context-for-pid` | Given a Claude Code PID, reads JSONL transcript and emits context stats |
 | `claude-tmux-sync` | Renames tmux session/window to match Claude Code session name |
-| `flowen-tab-launcher` | Direct-launch flowen repl without the picker (for `FLOWEN_TAB_ON_OPEN=1`) |
+| `codu-tmux-sync` | Renames tmux session/window to match codu builder session name |
+| `codu-tab-launcher` | Direct-launch codu builder without the picker (for `CODU_TAB_ON_OPEN=1`) |
+| `session-kill` | Full cleanup: kills process + deletes conversation from DB |
 
 ---
 
@@ -274,13 +295,15 @@ Over time, sessions accumulate. Good practice:
 dotfiles/
 ├── bin/                    # Scripts → ~/.local/bin/
 │   ├── ghostty-session-picker    # fzf session picker (Ghostty startup + prefix S)
-│   ├── flowen-plan-picker        # fzf plan picker (called by session picker)
-│   ├── flowen-tmux-status        # tmux status bar (AVE + plan + context)
-│   ├── claude-context-for-pid    # Claude Code context stats by PID
-│   ├── claude-tmux-sync          # auto-rename tmux to match Claude session
-│   ├── opencode-context-for-pid  # opencode context stats by PID
-│   ├── opencode-context-for-session # opencode context stats by session ID
-│   ├── flowen-tab-launcher       # direct flowen repl launch (no picker)
+│   ├── codu-plan-picker           # fzf plan picker (called by session picker)
+│   ├── codu-tmux-status           # tmux status bar (AVE + plan + context)
+│   ├── codu-context-for-pid       # codu builder context stats by PID
+│   ├── codu-context-for-session   # codu builder context stats by session ID
+│   ├── codu-tmux-sync             # auto-rename tmux to match codu session
+│   ├── codu-tab-launcher          # direct codu builder launch (no picker)
+│   ├── session-kill               # full cleanup (kill + delete conversation)
+│   ├── claude-context-for-pid     # Claude Code context stats by PID
+│   ├── claude-tmux-sync           # auto-rename tmux to match Claude session
 │   └── ...
 ├── brew/
 │   └── Brewfile.symlink    # → ~/.Brewfile

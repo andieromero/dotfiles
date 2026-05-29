@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# opencode-context-for-pid — given an opencode process PID (node wrapper),
+# codu-context-for-pid — given a codu builder process PID (node wrapper),
 # find its session in the DB and emit context stats.
 #
 # Strategy: if the process was started with -s <session-id>, use that directly.
 # Otherwise, match process start time (epoch) to the nearest session time_created.
 #
-# Usage: opencode-context-for-pid <pid>
+# Usage: codu-context-for-pid <pid>
 # Output: "142K ctx  $0.83" (or empty)
 
 set -euo pipefail
@@ -13,8 +13,8 @@ set -euo pipefail
 PID="${1:-}"
 [ -z "$PID" ] && exit 0
 
-OC_DB="$HOME/.local/share/opencode/opencode.db"
-[ -f "$OC_DB" ] || exit 0
+CODU_DB="$HOME/.local/share/opencode/opencode.db"
+[ -f "$CODU_DB" ] || exit 0
 command -v sqlite3 >/dev/null 2>&1 || exit 0
 
 # Check command line for -s session ID
@@ -36,9 +36,9 @@ if [ -z "$session_id" ]; then
   [ -z "$epoch_s" ] && exit 0
   epoch_ms=$((epoch_s * 1000))
 
-  # Find session created within 2 minutes of process start (opencode takes
+  # Find session created within 2 minutes of process start (codu builder takes
   # up to ~40s to initialize before creating the DB session record)
-  session_id=$(sqlite3 "$OC_DB" "
+  session_id=$(sqlite3 "$CODU_DB" "
     SELECT id FROM session
     WHERE ABS(time_created - $epoch_ms) < 120000
     AND time_archived IS NULL
@@ -50,7 +50,7 @@ fi
 [ -z "$session_id" ] && exit 0
 
 # Get peak context + cost
-result=$(sqlite3 "$OC_DB" "
+result=$(sqlite3 "$CODU_DB" "
   SELECT
     MAX(json_extract(data, '$.tokens.total')) as peak_ctx,
     SUM(json_extract(data, '$.cost')) as total_cost

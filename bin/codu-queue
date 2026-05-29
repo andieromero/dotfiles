@@ -1,31 +1,31 @@
 #!/usr/bin/env bash
-# flowen-queue: producer-side helper for the flowen launch/attach queue files.
+# codu-queue: producer-side helper for the codu builder launch/attach queue files.
 #
-# Decoupled producer/consumer pattern: anything that wants to open a flowen
+# Decoupled producer/consumer pattern: anything that wants to open a codu builder
 # session (Mission Control button, shell alias, raycast workflow, calendar
 # trigger, etc.) writes a JSON line here. The ghostty-session-picker and
-# flowen-tab-launcher consume on next ghostty tab/window open.
+# codu-tab-launcher consume on next ghostty tab/window open.
 #
 # Schema:
 #   pending-launches.queue : {"name": "<session>", "venture": "<v>", "launched_at": "<iso8601>"}
 #   pending-attaches.queue : {"session_name": "<tmux-session-name>"}
 #
 # Usage:
-#   flowen-queue launch <name> [<venture>]   # add a launch intent
-#   flowen-queue attach <session-name>       # add a resume intent
-#   flowen-queue list                        # show queued intents
-#   flowen-queue clear                       # drop all queued intents
+#   codu-queue launch <name> [<venture>]   # add a launch intent
+#   codu-queue attach <session-name>       # add a resume intent
+#   codu-queue list                        # show queued intents
+#   codu-queue clear                       # drop all queued intents
 #
 # Examples:
-#   flowen-queue launch nestor-deep-dive flowen-os
-#   flowen-queue attach flowen-141522
+#   codu-queue launch nestor-deep-dive flowen-os
+#   codu-queue attach codu-141522
 #
 # Queue files live at ~/.flowen/{pending-launches,pending-attaches}.queue.
 # Atomic-append via flock-protected `>>`; consumers pop via `tail -n +2 | mv`.
 
 set -euo pipefail
 
-QUEUE_DIR="${FLOWEN_QUEUE_DIR:-$HOME/.flowen}"
+QUEUE_DIR="${CODU_QUEUE_DIR:-$HOME/.flowen}"
 LAUNCH_QUEUE="$QUEUE_DIR/pending-launches.queue"
 ATTACH_QUEUE="$QUEUE_DIR/pending-attaches.queue"
 
@@ -33,13 +33,13 @@ mkdir -p "$QUEUE_DIR"
 
 usage() {
   cat <<EOF
-flowen-queue — producer helper for flowen launch/attach queues
+codu-queue — producer helper for codu builder launch/attach queues
 
 Usage:
-  flowen-queue launch <name> [<venture>]
-  flowen-queue attach <session-name>
-  flowen-queue list
-  flowen-queue clear
+  codu-queue launch <name> [<venture>]
+  codu-queue attach <session-name>
+  codu-queue list
+  codu-queue clear
 
 Files:
   $LAUNCH_QUEUE
@@ -50,8 +50,8 @@ EOF
 cmd="${1:-help}"
 case "$cmd" in
   launch)
-    name="${2:?usage: flowen-queue launch <name> [<venture>]}"
-    venture="${3:-flowen}"
+    name="${2:?usage: codu-queue launch <name> [<venture>]}"
+    venture="${3:-codu}"
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     # Sanitize: no embedded double-quotes in JSON values
     name=$(printf '%s' "$name" | tr -d '"')
@@ -60,7 +60,7 @@ case "$cmd" in
     printf 'queued launch: %s (venture: %s)\n' "$name" "$venture"
     ;;
   attach)
-    session="${2:?usage: flowen-queue attach <session-name>}"
+    session="${2:?usage: codu-queue attach <session-name>}"
     session=$(printf '%s' "$session" | tr -d '"')
     printf '{"session_name":"%s"}\n' "$session" >> "$ATTACH_QUEUE"
     printf 'queued attach: %s\n' "$session"
@@ -88,7 +88,7 @@ case "$cmd" in
     usage
     ;;
   *)
-    printf 'flowen-queue: unknown command "%s"\n' "$cmd" >&2
+    printf 'codu-queue: unknown command "%s"\n' "$cmd" >&2
     usage >&2
     exit 2
     ;;

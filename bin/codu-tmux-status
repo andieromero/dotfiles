@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# flowen-tmux-status: emit tmux status-left and status-right content.
+# codu-tmux-status: emit tmux status-left and status-right content.
 # Called by tmux status-interval (every 5s) via shell-command in tmux.conf.
 #
 # Left:  AVE badge + session name
-# Right: opencode/claude context tokens + cost + model
+# Right: codu builder/claude context tokens + cost + model
 #
 # Usage:
-#   flowen-tmux-status left    → AVE + session
-#   flowen-tmux-status right   → context info for current pane's agent session
+#   codu-tmux-status left    → AVE + session
+#   codu-tmux-status right   → context info for current pane's agent session
 
 set -euo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"
 
 SIDE="${1:-left}"
 STATE_FILE="$HOME/.flowen/state.toml"
-OC_DB="$HOME/.local/share/opencode/opencode.db"
+CODU_DB="$HOME/.local/share/opencode/opencode.db"
 CLAUDE_SESSIONS="$HOME/.claude/sessions"
 CLAUDE_PROJECTS="$HOME/.claude/projects"
 
@@ -32,7 +32,7 @@ if [ "$SIDE" = "left" ]; then
   plan_name=""
   if [ -n "${TMUX:-}" ]; then
     sess_name=$(tmux display-message -p '#{session_name}' 2>/dev/null || true)
-    plan_name=$(tmux show-options -v "@flowen-plan" 2>/dev/null || true)
+    plan_name=$(tmux show-options -v "@codu-plan" 2>/dev/null || true)
   fi
 
   # AVE in pink, session in purple, plan in dim
@@ -58,7 +58,7 @@ if [ "$SIDE" = "right" ]; then
     cmd=$(ps -p "$cpid" -o command= 2>/dev/null || true)
     case "$cmd" in
       *opencode*)
-        agent_type="opencode"
+        agent_type="codu"
         agent_pid="$cpid"
         break
         ;;
@@ -86,9 +86,9 @@ if [ "$SIDE" = "right" ]; then
     exit 0
   fi
 
-  # --- opencode: use PID helper (matches via -s flag or process start time) ---
-  if [ "$agent_type" = "opencode" ]; then
-    ctx=$("$HOME/.local/bin/opencode-context-for-pid" "$agent_pid" 2>/dev/null || true)
+  # --- codu builder: use PID helper (matches via -s flag or process start time) ---
+  if [ "$agent_type" = "codu" ]; then
+    ctx=$("$HOME/.local/bin/codu-context-for-pid" "$agent_pid" 2>/dev/null || true)
     if [ -n "$ctx" ]; then
       echo "#[fg=#87ceeb]${ctx}#[default] "
     fi

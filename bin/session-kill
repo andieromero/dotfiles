@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # session-kill: full cleanup of a tmux session + its agent's context.
 #
-# 1. Find the agent (opencode/claude) running in the tmux session
-# 2. Resolve it to a DB session ID (opencode sqlite / claude JSONL)
+# 1. Find the agent (codu builder/claude) running in the tmux session
+# 2. Resolve it to a DB session ID (codu builder sqlite / claude JSONL)
 # 3. Kill the tmux session (frees RAM)
 # 4. Delete the agent session from the DB (frees context + disk)
 #
@@ -16,7 +16,7 @@ SESS="${1:-}"
 [ -z "$SESS" ] && exit 1
 
 TMUX_BIN="${TMUX_BIN:-$(command -v tmux 2>/dev/null || echo /opt/homebrew/bin/tmux)}"
-OC_DB="$HOME/.local/share/opencode/opencode.db"
+CODU_DB="$HOME/.local/share/opencode/opencode.db"
 LOG_FILE="${GHOSTTY_SESSION_PICKER_LOG:-$HOME/.local/share/ghostty-session-picker.log}"
 
 log() {
@@ -46,7 +46,7 @@ fi
 
 # --- Step 2: resolve to session ID ---
 oc_session_id=""
-if [ -n "$oc_pid" ] && [ -f "$OC_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
+if [ -n "$oc_pid" ] && [ -f "$CODU_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
   # Check -s flag first
   cmd=$(ps -p "$oc_pid" -o command= 2>/dev/null || true)
   case "$cmd" in
@@ -60,7 +60,7 @@ if [ -n "$oc_pid" ] && [ -f "$OC_DB" ] && command -v sqlite3 >/dev/null 2>&1; th
       epoch_s=$(date -j -f "%a %b %d %T %Y" "$lstart" +%s 2>/dev/null || true)
       if [ -n "$epoch_s" ]; then
         epoch_ms=$((epoch_s * 1000))
-        oc_session_id=$(sqlite3 "$OC_DB" "
+        oc_session_id=$(sqlite3 "$CODU_DB" "
           SELECT id FROM session
           WHERE ABS(time_created - $epoch_ms) < 120000
           AND time_archived IS NULL
@@ -78,7 +78,7 @@ log "killing tmux session '$SESS' (oc_pid=$oc_pid, oc_session=$oc_session_id)"
 
 # --- Step 4: delete agent session from DB (frees context + disk) ---
 if [ -n "$oc_session_id" ] && command -v opencode >/dev/null 2>&1; then
-  log "deleting opencode session $oc_session_id"
+  log "deleting codu builder session $oc_session_id"
   opencode session delete "$oc_session_id" 2>/dev/null || true
 fi
 

@@ -1,29 +1,29 @@
 #!/usr/bin/env bash
-# flowen-tab-launcher: zero-prompt direct-launch of `flowen repl` in a named
-# tmux session. Mirrors ghostty-session-picker's `[new] flowen repl` handler
+# codu-tab-launcher: zero-prompt direct-launch of codu builder in a named
+# tmux session. Mirrors ghostty-session-picker's `[new] codu builder` handler
 # but skips the name prompt + skips fzf entirely.
 #
 # Usage:
-#   flowen-tab-launcher                  # auto-named flowen-<timestamp>
-#   flowen-tab-launcher my-session-name  # explicit name
-#   FLOWEN_TAB_NAME=my-name flowen-tab-launcher  # name via env (for picker chaining)
+#   codu-tab-launcher                  # auto-named codu-<timestamp>
+#   codu-tab-launcher my-session-name  # explicit name
+#   CODU_TAB_NAME=my-name codu-tab-launcher  # name via env (for picker chaining)
 #
 # Use cases:
-#   1. As a shell alias / direct invocation when you know you want flowen
-#   2. Chained from ghostty-session-picker when FLOWEN_TAB_ON_OPEN=1
+#   1. As a shell alias / direct invocation when you know you want codu builder
+#   2. Chained from ghostty-session-picker when CODU_TAB_ON_OPEN=1
 #   3. Targeted by external launchers (karabiner, raycast) that want to open a
-#      ghostty tab and immediately drop into flowen
+#      ghostty tab and immediately drop into codu builder
 
 set -euo pipefail
 
 TMUX_BIN="${TMUX_BIN:-$(command -v tmux 2>/dev/null || echo /opt/homebrew/bin/tmux)}"
 
 if [ -z "$TMUX_BIN" ] || ! "$TMUX_BIN" -V >/dev/null 2>&1; then
-  echo "flowen-tab-launcher: tmux not found at $TMUX_BIN" >&2
+  echo "codu-tab-launcher: tmux not found at $TMUX_BIN" >&2
   exec "$SHELL"
 fi
 
-# Pick launcher: flowen repl (AVE-aware) > raw opencode --agent flowen (fallback)
+# Pick launcher: flowen repl (AVE-aware codu builder) > raw opencode --agent flowen (fallback)
 if command -v flowen >/dev/null 2>&1; then
   launcher="flowen repl"
 else
@@ -31,7 +31,7 @@ else
 fi
 
 # Resolve session name: positional arg > env > pending-launches queue > auto-timestamp
-raw_name="${1:-${FLOWEN_TAB_NAME:-}}"
+raw_name="${1:-${CODU_TAB_NAME:-}}"
 
 # --- Queue consumer (Phase B.1 consumer side) ---
 # If a Mission Control button (or anything else) has queued a pending launch,
@@ -48,21 +48,21 @@ if [ -z "$raw_name" ] && [ -s "$QUEUE_FILE" ] && command -v jq >/dev/null 2>&1; 
 fi
 
 if [ -z "$raw_name" ]; then
-  raw_name="flowen-$(date +%H%M%S)"
+  raw_name="codu-$(date +%H%M%S)"
 fi
 # Sanitize: tmux session names disallow ':' and '.'; keep filesystem-safe
 name=$(printf '%s' "$raw_name" | tr -c 'A-Za-z0-9_-' '-' | sed 's/--*/-/g;s/^-*//;s/-*$//')
-[ -z "$name" ] && name="flowen-$$"
+[ -z "$name" ] && name="codu-$$"
 
 # Collision guard: if a tmux session with this name already exists, `tmux
 # new-session -d -s "$name"` fails silently (stderr is /dev/null below); then
 # `send-keys "$launcher" Enter` + `attach-session` target the EXISTING session,
-# which can be a claude-running session — typing `flowen repl` into claude's
-# prompt. Suffix-rename to avoid that. Mirrors flowen-start.
+# which can be a claude-running session — typing the launcher command into
+# claude's prompt. Suffix-rename to avoid that. Mirrors codu-start.
 if "$TMUX_BIN" has-session -t "$name" 2>/dev/null; then
   orig_name="$name"
   name="${name}-$(date +%H%M%S)"
-  echo "flowen-tab-launcher: session '$orig_name' exists; using '$name'" >&2
+  echo "codu-tab-launcher: session '$orig_name' exists; using '$name'" >&2
 fi
 
 # Restore last working dir if available (same as picker does)
@@ -76,13 +76,13 @@ fi
 # Create + name + launch + attach (same shape as picker's flowen handler)
 set +e
 "$TMUX_BIN" new-session -d -s "$name" -n "$name" 2>/dev/null
-"$TMUX_BIN" set-option -t "$name" "@opencode-name" "$name" 2>/dev/null
+"$TMUX_BIN" set-option -t "$name" "@codu-name" "$name" 2>/dev/null
 "$TMUX_BIN" send-keys -t "$name" "$launcher" Enter 2>/dev/null
 "$TMUX_BIN" attach-session -t "$name" 2>/dev/null
 rc=$?
 
 # If attach failed (no terminal, edge cases), fall through to a regular shell
 if [ "$rc" -ne 0 ]; then
-  echo "flowen-tab-launcher: tmux attach exited $rc — dropping to shell" >&2
+  echo "codu-tab-launcher: tmux attach exited $rc — dropping to shell" >&2
   exec "$SHELL"
 fi
