@@ -265,25 +265,14 @@ if [ -n "$TMUX_BIN" ]; then
       meta_colored="$col_age"
     fi
     [ -n "$plan_info" ] && meta_right="${meta_right:+$meta_right }${plan_info}" && meta_colored="${meta_colored:+$meta_colored }${plan_info}"
-    # Git info: branch + dirty/unpushed indicators
-    # Only show dirty/unpushed on first session per repo+branch (deduped above)
+    # Git info: aggregate dirty/unpushed across all repos (no branch name — could be many)
     git_suffix=""
     git_suffix_plain=""
-    # Short branch: strip feat/ prefix, truncate to 20 chars
-    branch_short=""
-    if [ -n "$git_branch" ]; then
-      branch_short=$(echo "$git_branch" | sed 's|^feat/||;s|^fix/||' | cut -c1-20)
-    fi
-    # Build suffix parts
     parts=""
     parts_plain=""
-    if [ -n "$branch_short" ]; then
-      parts="\033[2m${branch_short}\033[0m"
-      parts_plain="${branch_short}"
-    fi
     if [ "$git_dirty" -gt 0 ] 2>/dev/null; then
-      parts="${parts:+$parts }\033[33m●${git_dirty}\033[0m"
-      parts_plain="${parts_plain:+$parts_plain }●${git_dirty}"
+      parts="\033[33m●${git_dirty}\033[0m"
+      parts_plain="●${git_dirty}"
     fi
     if [ "$git_unpushed" -gt 0 ] 2>/dev/null; then
       parts="${parts:+$parts }\033[36m↑${git_unpushed}\033[0m"
