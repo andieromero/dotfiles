@@ -271,11 +271,11 @@ if [ -n "$TMUX_BIN" ]; then
     parts=""
     parts_plain=""
     if [ "$git_dirty" -gt 0 ] 2>/dev/null; then
-      parts="\033[33m●${git_dirty}\033[0m"
+      parts="\033[31m●${git_dirty}\033[0m"
       parts_plain="●${git_dirty}"
     fi
     if [ "$git_unpushed" -gt 0 ] 2>/dev/null; then
-      parts="${parts:+$parts }\033[36m↑${git_unpushed}\033[0m"
+      parts="${parts:+$parts }\033[32m↑${git_unpushed}\033[0m"
       parts_plain="${parts_plain:+$parts_plain }↑${git_unpushed}"
     fi
     [ -n "$parts" ] && git_suffix=" ${parts}" && git_suffix_plain=" ${parts_plain}"
@@ -357,7 +357,7 @@ TIPS_CMD="echo -e \"\
   ${D}LEGEND${N}\n\
   codu  codu builder     ++  new session\n\
   cc    claude code      --  plain shell\n\
-  ${Y}●${N}     uncommitted     ${C}↑${N}   unpushed\n\
+  ${R}●${N}     uncommitted     ${G}↑${N}   unpushed\n\
 \n\
   ${D}CONTEXT${N}\n\
   ${G}  88K  healthy${N}\n\
@@ -391,7 +391,7 @@ TIPS_CMD="echo -e \"\
           frees RAM + context + disk\n\
 \n\
   ${D}WHEN TO /WRAP VS CLEAR${N}\n\
-  ${Y}●${N} showing?  attach + commit first\n\
+  ${R}●${N} showing?  attach + commit first\n\
   ${Y}100-200K${N}    /wrap to learn + compact\n\
   ${R}>200K${N}       /wrap first, then ctrl-d\n\
   ${D}stale 3d+${N}   ctrl-d if nothing to save\n\
