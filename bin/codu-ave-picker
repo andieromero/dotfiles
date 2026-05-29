@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# codu-ave-picker: fzf-based AVE selector. Returns AVE id on stdout.
+# Pre-selects the current active AVE. Esc = keep current.
+#
+# Usage:
+#   ave=$(codu-ave-picker)
+#   # Returns e.g. "nestor" or "" if user kept current
+
+set -euo pipefail
+
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"
+FZF_BIN="${FZF_BIN:-$(command -v fzf 2>/dev/null || echo "/opt/homebrew/bin/fzf")}"
+STATE_FILE="$HOME/.flowen/state.toml"
+AGENT_FILE="$HOME/.flowen/agent.toml"
+
+# Read current active AVE
+active=""
+if [ -f "$STATE_FILE" ]; then
+  active=$(sed -n 's/^active_ave *= *"\([^"]*\)".*/\1/p' "$STATE_FILE" 2>/dev/null || true)
+fi
+
+# Build AVE list from agent.toml [ave.*] sections
+choices=""
+if [ -f "$AGENT_FILE" ]; then
+  while IFS= read -r ave_id; do
+    # Read emphasis for this AVE
+    emphasis=$(sed -n "/^\[ave\.${ave_id}\]/,/^\[/{ s/^emphasis *= *\"\(.*\)\"/\1/p; }" "$AGENT_FILE" 2>/dev/null | head -1)
+    emphasis=$(echo "$emphasis" | head -c 40)
+    if [ "$ave_id" = "$active" ]; then
+      line="● ${ave_id}  ${emphasis}"
+    else
+      line="  ${ave_id}  ${emphasis}"
+    fi
+    choices="${choices:+$choices\n}${line}"
+  done < <(grep '^\[ave\.' "$AGENT_FILE" 2>/dev/null | sed 's/^\[ave\.\(.*\)\]/\1/')
+fi
+
+# Add keep-current option at top
+if [ -n "$active" ]; then
+  choices="  (keep: ${active})\n${choices}"
+else
+  choices="  (no ave)\n${choices}"
+fi
+
+[ -z "$choices" ] && exit 0
+
+selected=$(echo -e "$choices" | "$FZF_BIN" \
+  --height=~40% \
+  --layout=reverse \
+  --border=rounded \
+  --border-label=' ave ' \
+  --border-label-pos=2 \
+  --prompt="ave > " \
+  --header="pick an AVE (esc = keep current)" \
+  --no-info \
+  --color=pointer:green,prompt:blue,header:dim) || exit 0
+
+# Handle keep
+case "$selected" in
+  *"keep"*|*"no ave"*) exit 0 ;;
+esac
+
+# Extract AVE id: "● nestor  fintech rigor..." → "nestor"
+ave_id=$(echo "$selected" | sed 's/^[● ]*//' | awk '{print $1}')
+echo "$ave_id"

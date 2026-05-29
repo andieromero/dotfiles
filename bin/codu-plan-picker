@@ -65,13 +65,21 @@ choices="   (no plan)\n$choices"
 
 [ -z "$choices" ] && exit 0
 
+TASK_PREVIEW="$HOME/.local/bin/codu-plan-tasks"
+
 selected=$(echo -e "$choices" | "$FZF_BIN" \
-  --height=~50% \
+  --height=100% \
   --layout=reverse \
   --border=rounded \
+  --border-label=' plans ' \
+  --border-label-pos=2 \
   --prompt="plan > " \
   --header="pick a plan (esc = skip)" \
   --no-info \
+  --preview="$TASK_PREVIEW {}" \
+  --preview-window='down,50%,border-rounded,wrap' \
+  --preview-label=' tasks ' \
+  --preview-label-pos=2 \
   --color=pointer:green,prompt:blue,header:dim) || exit 0
 
 # Handle skip

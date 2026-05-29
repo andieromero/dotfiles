@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# codu-plan-tasks: show open tasks for a plan. Used as fzf --preview command.
+#
+# Usage: codu-plan-tasks "!! plan-name  43%"
+# Output: first 15 open tasks, one per line
+
+set -euo pipefail
+
+INPUT="${1:-}"
+[ -z "$INPUT" ] && exit 0
+
+# Handle skip option
+case "$INPUT" in
+  *"no plan"*|*"no ave"*|*"keep"*) echo "  (no selection)"; exit 0 ;;
+esac
+
+# Extract plan name: "!! plan-name  43%" → "plan-name"
+PLAN=$(echo "$INPUT" | sed 's/^[! ]*//' | awk '{print $1}')
+[ -z "$PLAN" ] && exit 0
+
+BRAIN="${FLOWEN_BRAIN:-$HOME/Flowen/twin-andie}"
+
+# Find the plan file
+PLAN_FILE=""
+for f in "$BRAIN/experiences/plans/${PLAN}-plan.md" "$BRAIN/experiences/plans"/*/"${PLAN}-plan.md"; do
+  [ -f "$f" ] && PLAN_FILE="$f" && break
+done
+[ -z "$PLAN_FILE" ] && echo "  plan not found: $PLAN" && exit 0
+
+# Extract plan title
+title=$(grep -m1 "^#" "$PLAN_FILE" | sed 's/^#* *//' | head -c 60)
+echo "  $title"
+echo ""
+
+# Show open tasks (first 15)
+grep -n '\- \[ \]' "$PLAN_FILE" 2>/dev/null | head -15 | while IFS=: read -r line_num content; do
+  task=$(echo "$content" | sed 's/^[[:space:]]*- \[ \] *//' | head -c 55)
+  echo "  · $task"
+done
+
+# Count remaining
+total=$(grep -c '\- \[ \]' "$PLAN_FILE" 2>/dev/null || echo 0)
+if [ "$total" -gt 15 ]; then
+  remaining=$((total - 15))
+  echo ""
+  echo "  +${remaining} more"
+fi

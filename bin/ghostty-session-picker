@@ -467,11 +467,18 @@ case "$selected" in
     exec "$SHELL"
     ;;
   "++ claude")
-    # One name shared across:
-    #   - tmux session name
-    #   - tmux window name (→ Ghostty title via set-titles)
-    #   - claude session name (via @claude-name tmux option, honored by claude-tmux-sync)
-    # Plan picker: select an in-progress plan or skip for a blank session.
+    # AVE picker → Plan picker → Session starts
+    AVE_PICKER="$HOME/.local/bin/codu-ave-picker"
+    ave_name=""
+    if [ -x "$AVE_PICKER" ]; then
+      ave_name=$("$AVE_PICKER" < /dev/tty 2>/dev/tty || true)
+    fi
+    # Switch AVE if selected
+    if [ -n "$ave_name" ] && command -v flowen >/dev/null 2>&1; then
+      flowen ave switch "$ave_name" 2>/dev/null || true
+      log "switched AVE to $ave_name"
+    fi
+    # Plan picker
     plan_name=""
     PLAN_PICKER="$HOME/.local/bin/codu-plan-picker"
     if [ -x "$PLAN_PICKER" ]; then
@@ -503,6 +510,7 @@ case "$selected" in
     # (claude-tmux-sync) sees it. Then run claude inside the named session.
     "$TMUX_BIN" new-session -d -s "$name" -n "$name" 2>>"$LOG_FILE"
     "$TMUX_BIN" set-option -t "$name" "@claude-name" "$name" 2>>"$LOG_FILE"
+    [ -n "$ave_name" ] && "$TMUX_BIN" set-option -t "$name" "@codu-ave" "$ave_name" 2>>"$LOG_FILE"
     [ -n "$plan_name" ] && "$TMUX_BIN" set-option -t "$name" "@codu-plan" "$plan_name" 2>>"$LOG_FILE"
     "$TMUX_BIN" send-keys -t "$name" "claude --model claude-opus-4-6" Enter 2>>"$LOG_FILE"
     # If a plan was selected, send /dispatch after a brief delay for claude to boot
@@ -516,20 +524,24 @@ case "$selected" in
     exec "$SHELL"
     ;;
   "++ codu builder")
-    # Mirror of the claude flow: one name spanning tmux session + window + the
-    # @codu-name user option. Default launcher is `flowen repl` (the
-    # AVE-aware codu builder wrapper that reads ~/.flowen/state.toml + agent.toml
-    # for venture-specific context overlay). Fallback to raw `opencode --agent flowen`
-    # when the flowen CLI isn't on PATH (covers fresh-machine bootstrap before
-    # flowen-poc is uv-installed).
+    # AVE picker → Plan picker → Session starts
+    # Launcher: flowen repl (AVE-aware) or raw opencode fallback
     if command -v flowen >/dev/null 2>&1; then
       launcher="flowen repl"
     else
       launcher="opencode --agent ${OPENCODE_AGENT:-flowen}"
     fi
-    # Plan picker: select an in-progress plan or skip for a blank session.
-    # If a plan is selected, the plan slug becomes the session name and
-    # /dispatch <plan> is sent as the first message after the agent starts.
+    # AVE picker
+    AVE_PICKER="$HOME/.local/bin/codu-ave-picker"
+    ave_name=""
+    if [ -x "$AVE_PICKER" ]; then
+      ave_name=$("$AVE_PICKER" < /dev/tty 2>/dev/tty || true)
+    fi
+    if [ -n "$ave_name" ] && command -v flowen >/dev/null 2>&1; then
+      flowen ave switch "$ave_name" 2>/dev/null || true
+      log "switched AVE to $ave_name"
+    fi
+    # Plan picker with task preview
     plan_name=""
     PLAN_PICKER="$HOME/.local/bin/codu-plan-picker"
     if [ -x "$PLAN_PICKER" ]; then
@@ -557,7 +569,8 @@ case "$selected" in
     set +e
     "$TMUX_BIN" new-session -d -s "$name" -n "$name" 2>>"$LOG_FILE"
     "$TMUX_BIN" set-option -t "$name" "@codu-name" "$name" 2>>"$LOG_FILE"
-    # Store plan name as tmux user option so status bar + future tools can read it
+    # Store AVE + plan as tmux user options for status bar + future tools
+    [ -n "$ave_name" ] && "$TMUX_BIN" set-option -t "$name" "@codu-ave" "$ave_name" 2>>"$LOG_FILE"
     [ -n "$plan_name" ] && "$TMUX_BIN" set-option -t "$name" "@codu-plan" "$plan_name" 2>>"$LOG_FILE"
     "$TMUX_BIN" send-keys -t "$name" "$launcher" Enter 2>>"$LOG_FILE"
     # If a plan was selected, send /dispatch after a brief delay for the agent to boot
