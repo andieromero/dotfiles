@@ -284,8 +284,8 @@ if [ -n "$TMUX_BIN" ]; then
     if [ -n "$meta_right" ]; then
       left_len=${#left_plain}
       right_len=${#meta_right}
-      # Fixed width for consistent dot leaders — hscroll handles overflow
-      total=68
+      # Compact width for split screens — hscroll handles overflow
+      total=52
       dots_len=$((total - left_len - right_len - 2))
       [ "$dots_len" -lt 2 ] && dots_len=2
       dots=$(printf '%*s' "$dots_len" '' | tr ' ' '·')
