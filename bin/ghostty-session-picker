@@ -130,19 +130,12 @@ if [ -n "$TMUX_BIN" ]; then
     plan_val=$("$TMUX_BIN" show-options -t "$sess_name" -v "@flowen-plan" 2>/dev/null || true)
     [ -n "$plan_val" ] && plan_info="$plan_val"
 
-    # Check git status in session's working directory.
-    # Skip twin-andie brain repo — it's always dirty by design (captures, progress, etc).
+    # Check git status in session's working directory
     pane_path=$("$TMUX_BIN" display-message -t "$sess_name" -p '#{pane_current_path}' 2>/dev/null || true)
     if [ -n "$pane_path" ] && git -C "$pane_path" rev-parse --git-dir >/dev/null 2>&1; then
-      repo_root=$(git -C "$pane_path" rev-parse --show-toplevel 2>/dev/null || true)
-      case "$repo_root" in
-        */twin-andie|*/twin-*) ;;  # skip brain repos — always dirty
-        *)
-          git_dirty=$(git -C "$pane_path" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
-          git_unpushed=$(git -C "$pane_path" log --oneline '@{upstream}..HEAD' 2>/dev/null | wc -l | tr -d ' ')
-          git_branch=$(git -C "$pane_path" branch --show-current 2>/dev/null || true)
-          ;;
-      esac
+      git_dirty=$(git -C "$pane_path" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+      git_unpushed=$(git -C "$pane_path" log --oneline '@{upstream}..HEAD' 2>/dev/null | wc -l | tr -d ' ')
+      git_branch=$(git -C "$pane_path" branch --show-current 2>/dev/null || true)
     fi
 
     # Compute relative age from last activity
@@ -257,18 +250,21 @@ if [ -n "$TMUX_BIN" ]; then
       meta_colored="$col_age"
     fi
     [ -n "$plan_info" ] && meta_right="${meta_right:+$meta_right }${plan_info}" && meta_colored="${meta_colored:+$meta_colored }${plan_info}"
-    # Git status indicator: ● = uncommitted work, ↑ = unpushed commits
-    git_prefix=""
-    git_prefix_plain=""
-    if [ "$git_dirty" -gt 0 ] 2>/dev/null; then
-      git_prefix="\033[33m●\033[0m "  # yellow dot = uncommitted changes
-      git_prefix_plain="● "
+    # Git status suffix: ●3 = 3 uncommitted files, ↑2 = 2 unpushed commits
+    git_suffix=""
+    git_suffix_plain=""
+    if [ "$git_dirty" -gt 0 ] 2>/dev/null && [ "$git_unpushed" -gt 0 ] 2>/dev/null; then
+      git_suffix=" \033[33m●${git_dirty}\033[0m \033[36m↑${git_unpushed}\033[0m"
+      git_suffix_plain=" ●${git_dirty} ↑${git_unpushed}"
+    elif [ "$git_dirty" -gt 0 ] 2>/dev/null; then
+      git_suffix=" \033[33m●${git_dirty}\033[0m"
+      git_suffix_plain=" ●${git_dirty}"
     elif [ "$git_unpushed" -gt 0 ] 2>/dev/null; then
-      git_prefix="\033[36m↑\033[0m "  # cyan arrow = unpushed commits
-      git_prefix_plain="↑ "
+      git_suffix=" \033[36m↑${git_unpushed}\033[0m"
+      git_suffix_plain=" ↑${git_unpushed}"
     fi
-    left="${git_prefix}${tag} ${label}"
-    left_plain="${git_prefix_plain}${tag} ${label}"
+    left="${tag} ${label}${git_suffix}"
+    left_plain="${tag} ${label}${git_suffix_plain}"
     if [ -n "$meta_right" ]; then
       left_len=${#left_plain}
       right_len=${#meta_right}
