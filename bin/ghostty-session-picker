@@ -661,9 +661,26 @@ case "$selected" in
       log "fork session exited with code $rc"
       exec "$SHELL"
 
-    # Default: plain attach
+    # Default: attach + auto-resume last conversation if agent is running
     else
-      log "attaching: $session_name"
+      # Check if this session has a codu builder / opencode process running
+      attach_pane_pid=$("$TMUX_BIN" list-windows -t "$session_name" -F "#{pane_pid}" 2>/dev/null | head -1)
+      has_agent=0
+      if [ -n "$attach_pane_pid" ]; then
+        for cpid in $(ps -eo pid,ppid 2>/dev/null | awk -v p="$attach_pane_pid" '$2==p {print $1}'); do
+          cmd=$(ps -p "$cpid" -o command= 2>/dev/null || true)
+          case "$cmd" in *opencode*) has_agent=1; break ;; esac
+          [ -f "$HOME/.claude/sessions/$cpid.json" ] && has_agent=1 && break
+        done
+      fi
+      if [ "$has_agent" -eq 1 ]; then
+        # Agent is running — send /sessions to open the conversation picker
+        # so the user lands in their last conversation, not the blank home screen
+        log "attaching + resuming: $session_name"
+        "$TMUX_BIN" send-keys -t "$session_name" "/sessions" Enter 2>>"$LOG_FILE"
+      else
+        log "attaching (no agent): $session_name"
+      fi
       set +e
       "$TMUX_BIN" attach-session -t "$session_name" 2>>"$LOG_FILE"
       rc=$?
