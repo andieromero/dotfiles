@@ -425,13 +425,14 @@ selected=$(cat "$CHOICES_FILE" | "$FZF_BIN" \
 }
 # --expect makes fzf output: line 1 = key pressed, line 2+ = selections
 fzf_key=$(echo "$selected" | head -1)
-selected=$(echo "$selected" | tail -n +2 | head -1)
+all_selected=$(echo "$selected" | tail -n +2)
+selected=$(echo "$all_selected" | head -1)
 WRAP_ON_ATTACH=0
 FORK_SESSION=0
 [ "$fzf_key" = "ctrl-w" ] && WRAP_ON_ATTACH=1
 [ "$fzf_key" = "ctrl-f" ] && FORK_SESSION=1
 
-log "selected: $selected (key: $fzf_key, wrap: $WRAP_ON_ATTACH, fork: $FORK_SESSION)"
+log "selected: $selected (key: $fzf_key, wrap: $WRAP_ON_ATTACH, fork: $FORK_SESSION, count: $(echo "$all_selected" | wc -l | tr -d ' '))"
 
 case "$selected" in
   "++ shell")
@@ -573,10 +574,18 @@ case "$selected" in
     # All existing sessions — tag is just display. Session name after § delimiter.
     session_name="${selected##*§}"
 
-    # ctrl-w: send /wrap to the session before attaching
+    # ctrl-w: send /wrap to selected sessions, then attach to first
     if [ "$WRAP_ON_ATTACH" -eq 1 ]; then
-      log "wrapping + attaching: $session_name"
-      "$TMUX_BIN" send-keys -t "$session_name" "/wrap" Enter 2>>"$LOG_FILE"
+      # Send /wrap to ALL selected sessions
+      echo "$all_selected" | while IFS= read -r line; do
+        case "$line" in '++'*) continue ;; esac
+        sess="${line##*§}"
+        [ -z "$sess" ] && continue
+        log "sending /wrap to: $sess"
+        "$TMUX_BIN" send-keys -t "$sess" "/wrap" Enter 2>>"$LOG_FILE"
+      done
+      # Attach to the first one so user can watch /wrap run
+      log "attaching to first: $session_name"
       set +e
       "$TMUX_BIN" attach-session -t "$session_name" 2>>"$LOG_FILE"
       rc=$?
