@@ -2,7 +2,6 @@
 # codu-plan-tasks: show open tasks for a plan. Used as fzf --preview command.
 #
 # Usage: codu-plan-tasks "!! plan-name  43%"
-# Output: first 15 open tasks, one per line
 
 set -euo pipefail
 
@@ -11,7 +10,7 @@ INPUT="${1:-}"
 
 # Handle skip option
 case "$INPUT" in
-  *"no plan"*|*"no ave"*|*"keep"*) echo "  (no selection)"; exit 0 ;;
+  *"no plan"*|*"no ave"*|*"keep"*) echo ""; echo "  start a blank session"; exit 0 ;;
 esac
 
 # Extract plan name: "!! plan-name  43%" → "plan-name"
@@ -27,21 +26,52 @@ for f in "$BRAIN/experiences/plans/${PLAN}-plan.md" "$BRAIN/experiences/plans"/*
 done
 [ -z "$PLAN_FILE" ] && echo "  plan not found: $PLAN" && exit 0
 
-# Extract plan title
-title=$(grep -m1 "^#" "$PLAN_FILE" | sed 's/^#* *//' | head -c 60)
+# Extract plan title — strip markdown
+title=$(grep -m1 "^#" "$PLAN_FILE" | sed 's/^#* *//;s/^Plan: *//' | head -c 50)
+
+# Progress
+done_count=$(grep -c '\- \[x\]' "$PLAN_FILE" 2>/dev/null || echo 0)
+open_count=$(grep -c '\- \[ \]' "$PLAN_FILE" 2>/dev/null || echo 0)
+total=$((done_count + open_count))
+pct=0
+[ "$total" -gt 0 ] && pct=$((done_count * 100 / total))
+
+# Priority
+priority=$(sed -n 's/^priority: *\(.*\)/\1/p' "$PLAN_FILE" | head -1)
+
+# Progress bar
+bar_w=24
+bar_fill=$((pct * bar_w / 100))
+bar_empty=$((bar_w - bar_fill))
+bar=$(printf '%*s' "$bar_fill" '' | tr ' ' '█')$(printf '%*s' "$bar_empty" '' | tr ' ' '░')
+
+# Render
+echo ""
 echo "  $title"
 echo ""
+echo "  $bar  ${pct}%  (${done_count}/${total})"
+[ -n "$priority" ] && echo "  priority: $priority"
+echo ""
+echo "  ─── open tasks ──────────────────────────"
+echo ""
 
-# Show open tasks (first 15)
-grep -n '\- \[ \]' "$PLAN_FILE" 2>/dev/null | head -15 | while IFS=: read -r line_num content; do
-  task=$(echo "$content" | sed 's/^[[:space:]]*- \[ \] *//' | head -c 55)
+# Show open tasks — strip markdown formatting
+grep '\- \[ \]' "$PLAN_FILE" 2>/dev/null | head -12 | while IFS= read -r line; do
+  task=$(echo "$line" \
+    | sed 's/^[[:space:]]*- \[ \] *//' \
+    | sed 's/\*\*//g' \
+    | sed 's/`//g' \
+    | sed 's/\[//g;s/\]//g' \
+    | head -c 48)
   echo "  · $task"
 done
 
-# Count remaining
-total=$(grep -c '\- \[ \]' "$PLAN_FILE" 2>/dev/null || echo 0)
-if [ "$total" -gt 15 ]; then
-  remaining=$((total - 15))
+if [ "$open_count" -gt 12 ]; then
+  remaining=$((open_count - 12))
   echo ""
-  echo "  +${remaining} more"
+  echo "  +${remaining} more tasks"
 fi
+
+echo ""
+echo "  ─── done ────────────────────────────────"
+echo "  ${done_count} tasks completed"
