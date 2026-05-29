@@ -3,6 +3,6 @@
   "theme": "opencode",
     "plugin": [
         "file:///Users/casadolimiar/.config/opencode/tui-plugins/hide-home-logo.ts",
-        "file:///Users/casadolimiar/.config/opencode/tui-plugins/codu-session-panel.ts"
+        "file:///Users/casadolimiar/.config/opencode/tui-plugins/codu-session-panel.tsx"
     ]
 }
