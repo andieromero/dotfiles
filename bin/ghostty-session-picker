@@ -529,7 +529,7 @@ case "$selected" in
     if command -v flowen >/dev/null 2>&1; then
       launcher="flowen repl"
     else
-      launcher="opencode --agent ${OPENCODE_AGENT:-flowen}"
+      launcher="opencode --agent ${OPENCODE_AGENT:-codu}"
     fi
     # AVE picker
     AVE_PICKER="$HOME/.local/bin/codu-ave-picker"
@@ -622,9 +622,9 @@ case "$selected" in
               oc_sid=$(echo "$cmd" | grep -o '\-s ses_[^ ]*' | sed 's/-s //' || true)
               if [ -z "$oc_sid" ]; then
                 # Fallback: fork the most recent session
-                fork_cmd="opencode --agent flowen --fork -c"
+                fork_cmd="opencode --agent codu --fork -c"
               else
-                fork_cmd="opencode --agent flowen --fork -s $oc_sid"
+                fork_cmd="opencode --agent codu --fork -s $oc_sid"
               fi
               break
               ;;
@@ -643,7 +643,7 @@ case "$selected" in
       fi
       # Fallback if we couldn't detect
       if [ -z "$fork_cmd" ]; then
-        fork_cmd="opencode --agent flowen --fork -c"
+        fork_cmd="opencode --agent codu --fork -c"
         fork_type="codu"
       fi
       # Create new tmux session named <old>-fork

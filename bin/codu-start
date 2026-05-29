@@ -31,7 +31,7 @@ if ! command -v gh >/dev/null 2>&1; then
 fi
 if ! command -v flowen >/dev/null 2>&1; then
   echo "codu-start: flowen CLI not found — falling back to raw opencode" >&2
-  LAUNCHER="opencode --agent flowen"
+  LAUNCHER="opencode --agent codu"
 else
   LAUNCHER="flowen repl"
 fi

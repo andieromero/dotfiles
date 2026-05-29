@@ -23,11 +23,11 @@ if [ -z "$TMUX_BIN" ] || ! "$TMUX_BIN" -V >/dev/null 2>&1; then
   exec "$SHELL"
 fi
 
-# Pick launcher: flowen repl (AVE-aware codu builder) > raw opencode --agent flowen (fallback)
+# Pick launcher: flowen repl (AVE-aware codu builder) > raw opencode --agent codu (fallback)
 if command -v flowen >/dev/null 2>&1; then
   launcher="flowen repl"
 else
-  launcher="opencode --agent ${OPENCODE_AGENT:-flowen}"
+  launcher="opencode --agent ${OPENCODE_AGENT:-codu}"
 fi
 
 # Resolve session name: positional arg > env > pending-launches queue > auto-timestamp
