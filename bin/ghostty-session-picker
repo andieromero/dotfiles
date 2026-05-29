@@ -371,15 +371,17 @@ TIPS_CMD="echo -e \"\
           kills + deletes conversation\n\
           frees RAM + context + disk\n\
 \n\
-  ${D}/compact${N}  ${D}(type inside session)${N}\n\
-          shrinks context, keeps convo\n\
-          use at ${Y}100-200K${N} tokens mid-task\n\
+  ${G}/wrap${N}  ${D}(type inside session)${N}\n\
+          runs /learn → extracts patterns to brain\n\
+          writes handoff doc → saves resume state\n\
+          updates progress.md → compacts context\n\
+          ${D}always /wrap before killing a session${N}\n\
 \n\
-  ${D}WHEN TO CLEAR VS COMPACT${N}\n\
+  ${D}WHEN TO /WRAP VS CLEAR${N}\n\
   ${Y}●${N} showing?  attach + commit first\n\
-  ${Y}100-200K${N}    /compact inside session\n\
-  ${R}>200K${N}       ctrl-d, start fresh\n\
-  ${D}stale 3d+${N}   ctrl-d to clean up\n\
+  ${Y}100-200K${N}    /wrap to learn + compact\n\
+  ${R}>200K${N}       /wrap first, then ctrl-d\n\
+  ${D}stale 3d+${N}   ctrl-d if nothing to save\n\
 \""
 
 selected=$(cat "$CHOICES_FILE" | "$FZF_BIN" \
