@@ -114,7 +114,6 @@ if [ -n "$TMUX_BIN" ]; then
   # Both runtimes can coexist in different panes of the same tmux session, so
   # we capture each independently and the tag reflects whichever (or both) we find.
   now_epoch=$(date +%s)
-  SEEN_REPOS_FILE=$(mktemp /tmp/ghostty-picker-repos-XXXXXX)
   while IFS= read -r sess_line; do
     sess_name="${sess_line%% *}"
     sess_activity="${sess_line##* }"
@@ -135,18 +134,8 @@ if [ -n "$TMUX_BIN" ]; then
     pane_path=$("$TMUX_BIN" display-message -t "$sess_name" -p '#{pane_current_path}' 2>/dev/null || true)
     if [ -n "$pane_path" ] && git -C "$pane_path" rev-parse --git-dir >/dev/null 2>&1; then
       git_branch=$(git -C "$pane_path" branch --show-current 2>/dev/null || true)
-      # Only compute dirty/unpushed per unique repo+branch combo.
-      # Multiple sessions on the same repo+branch share git state — showing
-      # the same count on each is noise. Dedupe by repo root + branch.
-      repo_root=$(git -C "$pane_path" rev-parse --show-toplevel 2>/dev/null || true)
-      repo_key="${repo_root}:${git_branch}"
-      # Use a temp file to track seen repo+branch combos (bash assoc arrays
-      # aren't available in all shells this runs under)
-      if ! grep -qxF "$repo_key" "$SEEN_REPOS_FILE" 2>/dev/null; then
-        echo "$repo_key" >> "$SEEN_REPOS_FILE"
-        git_dirty=$(git -C "$pane_path" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
-        git_unpushed=$(git -C "$pane_path" log --oneline '@{upstream}..HEAD' 2>/dev/null | wc -l | tr -d ' ')
-      fi
+      git_dirty=$(git -C "$pane_path" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+      git_unpushed=$(git -C "$pane_path" log --oneline '@{upstream}..HEAD' 2>/dev/null | wc -l | tr -d ' ')
     fi
 
     # Compute relative age from last activity
@@ -343,7 +332,7 @@ fi
 # The regeneration re-runs this script's list-building logic via a helper.
 CHOICES_FILE=$(mktemp /tmp/ghostty-picker-XXXXXX)
 echo -e "$choices" > "$CHOICES_FILE"
-trap 'rm -f "$CHOICES_FILE" "$SEEN_REPOS_FILE"' EXIT
+trap 'rm -f "$CHOICES_FILE"' EXIT
 
 # Kill commands for fzf --bind.
 # fzf passes selected lines via {+f} (file with selected items, one per line).
@@ -380,6 +369,15 @@ TIPS_CMD="echo -e \"\
   ${G}<100K${N} ~\\\$0.06/msg  ${Y}200K${N} ~\\\$0.30/msg  ${R}500K${N} ~\\\$2/msg\n\
 \n\
   ${D}ACTIONS${N}\n\
+  ${G}ctrl-w${N}  wrap + attach\n\
+          opens session and runs /wrap:\n\
+          commit+push → /learn → handoff\n\
+          ${D}safest way to close a session${N}\n\
+\n\
+  ${C}ctrl-f${N}  fork session\n\
+          new session with old conversation\n\
+          original stays untouched\n\
+\n\
   ${Y}ctrl-x${N}  safe kill\n\
           ends process, frees RAM\n\
           conversation stays, resume later\n\
@@ -387,12 +385,6 @@ TIPS_CMD="echo -e \"\
   ${R}ctrl-d${N}  full delete ${D}(cannot undo)${N}\n\
           kills + deletes conversation\n\
           frees RAM + context + disk\n\
-\n\
-  ${G}/wrap${N}  ${D}(type inside session before killing)${N}\n\
-          commits + pushes code to branch\n\
-          runs /learn → extracts patterns\n\
-          writes handoff → updates progress.md\n\
-          ${D}ensures nothing is lost before cleanup${N}\n\
 \n\
   ${D}WHEN TO /WRAP VS CLEAR${N}\n\
   ${Y}●${N} showing?  attach + commit first\n\
@@ -408,7 +400,8 @@ selected=$(cat "$CHOICES_FILE" | "$FZF_BIN" \
   --border-label=' sessions ' \
   --border-label-pos=2 \
   --prompt="session > " \
-  --header='enter·attach  tab·multi  ctrl-x·kill  ctrl-d·delete' \
+  --header='enter·attach  ctrl-w·wrap  ctrl-f·fork  ctrl-x·kill  ctrl-d·delete' \
+  --expect='ctrl-w,ctrl-f' \
   --ansi \
   --hscroll-off=10 \
   --scrollbar='▐' \
@@ -426,10 +419,15 @@ selected=$(cat "$CHOICES_FILE" | "$FZF_BIN" \
   # If fzf is cancelled (Esc/Ctrl-C), start plain shell
   exec "$SHELL"
 }
-# In multi-select mode, take only the first selected line for attach/launch
-selected=$(echo "$selected" | head -1)
+# --expect makes fzf output: line 1 = key pressed, line 2+ = selections
+fzf_key=$(echo "$selected" | head -1)
+selected=$(echo "$selected" | tail -n +2 | head -1)
+WRAP_ON_ATTACH=0
+FORK_SESSION=0
+[ "$fzf_key" = "ctrl-w" ] && WRAP_ON_ATTACH=1
+[ "$fzf_key" = "ctrl-f" ] && FORK_SESSION=1
 
-log "selected: $selected"
+log "selected: $selected (key: $fzf_key, wrap: $WRAP_ON_ATTACH, fork: $FORK_SESSION)"
 
 case "$selected" in
   "++ shell")
@@ -570,12 +568,82 @@ case "$selected" in
   "codu "*|"cc "*|"codu+cc "*|"-- "*)
     # All existing sessions — tag is just display. Session name after § delimiter.
     session_name="${selected##*§}"
-    log "attaching: $session_name"
-    set +e
-    "$TMUX_BIN" attach-session -t "$session_name" 2>>"$LOG_FILE"
-    rc=$?
-    log "tmux attach exited with code $rc"
-    exec "$SHELL"
+
+    # ctrl-w: send /wrap to the session before attaching
+    if [ "$WRAP_ON_ATTACH" -eq 1 ]; then
+      log "wrapping + attaching: $session_name"
+      "$TMUX_BIN" send-keys -t "$session_name" "/wrap" Enter 2>>"$LOG_FILE"
+      set +e
+      "$TMUX_BIN" attach-session -t "$session_name" 2>>"$LOG_FILE"
+      rc=$?
+      log "tmux attach exited with code $rc"
+      exec "$SHELL"
+
+    # ctrl-f: fork — new session with the old conversation as context
+    elif [ "$FORK_SESSION" -eq 1 ]; then
+      log "forking: $session_name"
+      # Find the agent type + session ID from the old tmux session
+      old_pane_pid=$("$TMUX_BIN" list-windows -t "$session_name" -F "#{pane_pid}" 2>/dev/null | head -1)
+      fork_cmd=""
+      fork_type=""
+      if [ -n "$old_pane_pid" ]; then
+        for cpid in $(ps -eo pid,ppid 2>/dev/null | awk -v p="$old_pane_pid" '$2==p {print $1}'); do
+          cmd=$(ps -p "$cpid" -o command= 2>/dev/null || true)
+          case "$cmd" in
+            *opencode*)
+              fork_type="opencode"
+              # Extract -s session ID if present
+              oc_sid=$(echo "$cmd" | grep -o '\-s ses_[^ ]*' | sed 's/-s //' || true)
+              if [ -z "$oc_sid" ]; then
+                # Fallback: fork the most recent session
+                fork_cmd="opencode --agent flowen --fork -c"
+              else
+                fork_cmd="opencode --agent flowen --fork -s $oc_sid"
+              fi
+              break
+              ;;
+          esac
+          if [ -f "$HOME/.claude/sessions/$cpid.json" ]; then
+            fork_type="claude"
+            claude_sid=$(jq -r '.sessionId // empty' "$HOME/.claude/sessions/$cpid.json" 2>/dev/null)
+            if [ -n "$claude_sid" ]; then
+              fork_cmd="claude --model claude-opus-4-6 --resume $claude_sid --fork-session"
+            else
+              fork_cmd="claude --model claude-opus-4-6 --continue --fork-session"
+            fi
+            break
+          fi
+        done
+      fi
+      # Fallback if we couldn't detect
+      if [ -z "$fork_cmd" ]; then
+        fork_cmd="opencode --agent flowen --fork -c"
+        fork_type="opencode"
+      fi
+      # Create new tmux session named <old>-fork
+      new_name="${session_name}-fork"
+      if "$TMUX_BIN" has-session -t "$new_name" 2>/dev/null; then
+        new_name="${session_name}-fork-$(date +%H%M%S)"
+      fi
+      cd_to_last_dir
+      log "forking $session_name → $new_name (type: $fork_type, cmd: $fork_cmd)"
+      set +e
+      "$TMUX_BIN" new-session -d -s "$new_name" -n "$new_name" 2>>"$LOG_FILE"
+      "$TMUX_BIN" send-keys -t "$new_name" "$fork_cmd" Enter 2>>"$LOG_FILE"
+      "$TMUX_BIN" attach-session -t "$new_name" 2>>"$LOG_FILE"
+      rc=$?
+      log "fork session exited with code $rc"
+      exec "$SHELL"
+
+    # Default: plain attach
+    else
+      log "attaching: $session_name"
+      set +e
+      "$TMUX_BIN" attach-session -t "$session_name" 2>>"$LOG_FILE"
+      rc=$?
+      log "tmux attach exited with code $rc"
+      exec "$SHELL"
+    fi
     ;;
   *)
     log "unknown selection: $selected"
