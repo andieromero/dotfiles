@@ -415,7 +415,7 @@ selected=$(cat "$CHOICES_FILE" | "$FZF_BIN" \
   --with-nth=1 \
   --preview="$TIPS_CMD" \
   --preview-window='down,50%,border-rounded' \
-  --preview-label=' code guide ' \
+  --preview-label=' codu guide ' \
   --preview-label-pos=2 \
   --bind "ctrl-x:execute-silent($SAFE_KILL_CMD)+reload($0 --list-only)" \
   --bind "ctrl-d:execute-silent($FULL_DELETE_CMD)+reload($0 --list-only)" \
