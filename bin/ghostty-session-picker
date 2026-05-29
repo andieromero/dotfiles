@@ -375,7 +375,7 @@ TIPS_CMD="echo -e \"\
   ${D}ACTIONS${N}\n\
   ${G}ctrl-w${N}  wrap + attach\n\
           opens session and runs /wrap:\n\
-          commit+push → /learn → handoff\n\
+          git check → /learn → handoff\n\
           ${D}safest way to close a session${N}\n\
 \n\
   ${C}ctrl-f${N}  fork session\n\
