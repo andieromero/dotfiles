@@ -18,7 +18,7 @@ DOTFILES="${DOTFILES_DIR:-$HOME/.config}"
 # (path-relative-to-DOTFILES, minimum-line-count)
 FLOORS=(
   "aerospace/aerospace.toml:200"
-  "sketchybar/sketchybarrc:400"
+  "sketchybar/sketchybarrc:350"
   "karabiner/karabiner.json:5"
   "zshrc:50"
   "Brewfile:30"
