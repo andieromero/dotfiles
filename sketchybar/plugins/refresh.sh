@@ -117,9 +117,6 @@ sketchybar --set "$NAME" \
   icon.color="$WHITE" \
   background.color="$ITEM_BG_COLOR"
 
-# --- macOS notification (best-effort; ignore if osascript blocked) ---
-osascript -e "display notification \"$summary\" with title \"$notif_title\"" 2>/dev/null || true
-
 # --- Update popup tooltip label (if popup item exists) ---
 sketchybar --set "$NAME.summary" label="$(cat "$SUMMARY_FILE")" 2>/dev/null || true
 
