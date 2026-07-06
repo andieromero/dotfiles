@@ -307,18 +307,18 @@ fi
 
 # New session options.
 # Order matters: fzf's default cursor lands on the first row, so the first
-# option here is the one a fresh terminal opens with a single Enter. Andie
-# defaults to codu builder — put it on top.
+# option here is the one a fresh terminal opens with a single Enter.
+# Claude on top — default new session.
 new_options=""
-if [ -n "$TMUX_BIN" ] && command -v flowen >/dev/null 2>&1; then
-  new_options="++ codu builder"
-elif [ -n "$TMUX_BIN" ] && command -v opencode >/dev/null 2>&1; then
-  new_options="++ codu builder"
-fi
+[ -n "$TMUX_BIN" ] && new_options="++ claude"
 [ -n "$TMUX_BIN" ] && new_options="${new_options:+$new_options\n}++ tmux"
-[ -n "$TMUX_BIN" ] && new_options="${new_options:+$new_options\n}++ claude"
 new_options="${new_options:+$new_options\n}++ shell"
 [ -n "$ZELLIJ_BIN" ] && new_options="$new_options\n++ zellij"
+if [ -n "$TMUX_BIN" ] && command -v flowen >/dev/null 2>&1; then
+  new_options="${new_options:+$new_options\n}++ codu builder"
+elif [ -n "$TMUX_BIN" ] && command -v opencode >/dev/null 2>&1; then
+  new_options="${new_options:+$new_options\n}++ codu builder"
+fi
 
 if [ -n "$choices" ]; then
   choices="$new_options\n$choices"
