@@ -179,10 +179,18 @@ if [ -n "$TMUX_BIN" ]; then
         # Claude Code: has a session JSON under ~/.claude/sessions/<pid>.json
         if [ -d "$SESSIONS_DIR" ] && [ -f "$SESSIONS_DIR/$cpid.json" ]; then
           cname=""
+          cnamesrc=""
           if command -v jq &>/dev/null; then
             cname=$(jq -r '.name // empty' "$SESSIONS_DIR/$cpid.json" 2>/dev/null)
+            cnamesrc=$(jq -r '.nameSource // empty' "$SESSIONS_DIR/$cpid.json" 2>/dev/null)
           fi
-          [ -z "$cname" ] && cname="$win_name"
+          # A "derived" name is Claude's cwd-based auto-guess (e.g. twin-andie-6c)
+          # — every session in the same repo collides on it. It must NOT override
+          # the human-picked tmux session name. Only a user /rename (nameSource
+          # != derived) beats the tmux session name. Fall back to sess_name.
+          if [ -z "$cname" ] || [ "$cnamesrc" = "derived" ]; then
+            cname="$sess_name"
+          fi
           claude_names="${claude_names:+$claude_names, }$cname"
           # Grab context stats for this Claude process
           if [ -x "$CLAUDE_CONTEXT_BIN" ]; then
